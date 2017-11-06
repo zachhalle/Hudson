@@ -52,14 +52,40 @@ let subst_exp = raise Unimplemented
 
 (* Environments *)
 
-type env = EnvImpl
+module IntKey = struct
+  type t = int
+  let compare = compare
+end
 
-let empty = raise Unimplemented
-let add_typ = raise Unimplemented
-let add_val = raise Unimplemented
+module VarMap = Map.Make(IntKey)
 
-let lookup_typ = raise Unimplemented
-let lookup_val = raise Unimplemented
+type env = 
+  { ksize : int ; 
+    kenv : kind list ; 
+    tenv : (int * typ) VarMap.t }
+
+let empty = { ksize = 0 ; kenv = [] ; tenv = VarMap.empty }
+
+let add_typ k { ksize ; kenv ; tenv } =
+  { ksize = ksize + 1 ;
+    kenv = k :: kenv ;
+    tenv = tenv }
+
+let add_val v t { ksize ; kenv ; tenv } =
+  { ksize = ksize ;
+    kenv = kenv ;
+    tenv = VarMap.add v (ksize, t) tenv }
+
+let lookup_typ i { ksize ; kenv ; tenv } =
+  try lift_kind (i + 1) (List.nth kenv i) with
+  | Failure _ -> raise (Error "Undefined type variable")
+
+let lookup_val v { ksize ; kenv ; tenv } =
+  let n, c = 
+    try VarMap.find v tenv with
+    | Not_found -> raise (Error "Undefined variable")
+  in
+  lift_typ (ksize - n) c
 
 (* Normalisation and Equality *)
 

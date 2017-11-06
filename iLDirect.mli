@@ -54,7 +54,7 @@ val subst_exp : exp subst -> exp -> exp
 type env
 
 val empty : env
-val add_typ : var -> kind -> env -> env
+val add_typ : kind -> env -> env
 val add_val : var -> typ -> env -> env
 
 val lookup_typ : var -> env -> kind (* raise Error *)
