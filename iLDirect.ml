@@ -1,6 +1,6 @@
 (* Syntax *)
 
-type var = string
+type var = int
 
 type kind =
   | BaseK
@@ -38,6 +38,18 @@ type exp =
 exception Error of string
 exception Unimplemented
 
+(* Substitutions *)
+
+let lift_kind = raise Unimplemented
+let lift_typ = raise Unimplemented
+let lift_exp = raise Unimplemented
+
+type 'a subst = (var * 'a) list
+
+let subst_typ = raise Unimplemented
+let subst_typ_exp = raise Unimplemented
+let subst_exp = raise Unimplemented
+
 (* Environments *)
 
 type env = EnvImpl
@@ -48,14 +60,6 @@ let add_val = raise Unimplemented
 
 let lookup_typ = raise Unimplemented
 let lookup_val = raise Unimplemented
-
-(* Substitutions *)
-
-type 'a subst = (var * 'a) list
-
-let subst_typ = raise Unimplemented
-let subst_typ_exp = raise Unimplemented
-let subst_exp = raise Unimplemented
 
 (* Normalisation and Equality *)
 

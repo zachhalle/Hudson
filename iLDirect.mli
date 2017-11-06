@@ -1,6 +1,6 @@
 (* Syntax *)
 
-type var = string
+type var = int
 
 type kind =
   | BaseK
@@ -37,6 +37,18 @@ type exp =
 
 exception Error of string
 
+(* Substitutions *)
+
+val lift_kind : int -> kind -> kind
+val lift_typ : int -> typ -> typ
+val lift_exp : int -> exp -> exp
+
+type 'a subst = (var * 'a) list
+
+val subst_typ : typ subst -> typ -> typ
+val subst_typ_exp : typ subst -> exp -> exp
+val subst_exp : exp subst -> exp -> exp
+
 (* Environments *)
 
 type env
@@ -47,16 +59,6 @@ val add_val : var -> typ -> env -> env
 
 val lookup_typ : var -> env -> kind (* raise Error *)
 val lookup_val : var -> env -> typ (* raise Error *)
-
-
-(* Substitutions *)
-
-type 'a subst = (var * 'a) list
-
-val subst_typ : typ subst -> typ -> typ
-val subst_typ_exp : typ subst -> exp -> exp
-val subst_exp : exp subst -> exp -> exp
-
 
 (* Normalisation and Equality *)
 
