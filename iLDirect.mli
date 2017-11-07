@@ -7,16 +7,18 @@ type kind =
   | ArrK of kind * kind
   | ProdK of kind list
 
-type typ =
-  | VarT of int * int option
+type typ = (* de Bruijn representation *)
+  | VarT of int
   | PrimT of Prim.typ
+  | ArrT of typ * typ
   | ProdT of typ list
-  | AllT of var * kind * typ
-  | AnyT of var * kind * typ
+  | AllT of kind * typ (* binds *)
+  | AnyT of kind * typ (* binds *)
   | AppT of typ * typ
+  | LamT of kind * typ (* binds *)
   | TupT of typ list
   | DotT of typ * int
-  | RecT of var * kind * typ
+  | RecT of kind * typ (* binds *)
 
 type exp =
   | VarE of var
@@ -26,10 +28,10 @@ type exp =
   | AppE of exp * exp
   | TupE of exp list
   | DotE of exp * int
-  | GenE of var * kind * exp
+  | GenE of kind * exp (* binds *)
   | InstE of exp * typ
   | PackE of typ * exp * typ
-  | OpenE of exp * var * var * exp
+  | OpenE of exp * var * exp (* binds *)
   | RollE of exp * typ
   | UnrollE of exp
   | RecE of var * typ * exp
@@ -39,15 +41,11 @@ exception Error of string
 
 (* Substitutions *)
 
-val lift_kind : int -> kind -> kind
 val lift_typ : int -> typ -> typ
 val lift_exp : int -> exp -> exp
 
-type 'a subst = (var * 'a) list
-
-val subst_typ : typ subst -> typ -> typ
-val subst_typ_exp : typ subst -> exp -> exp
-val subst_exp : exp subst -> exp -> exp
+val subst_typ : typ -> typ -> typ
+val subst_exp : typ -> exp -> exp
 
 (* Environments *)
 

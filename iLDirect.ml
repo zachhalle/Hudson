@@ -8,15 +8,17 @@ type kind =
   | ProdK of kind list
 
 type typ =
-  | VarT of int * int option
+  | VarT of int
   | PrimT of Prim.typ
+  | ArrT of typ * typ
   | ProdT of typ list
-  | AllT of var * kind * typ
-  | AnyT of var * kind * typ
+  | AllT of kind * typ (* binds *)
+  | AnyT of kind * typ (* binds *)
   | AppT of typ * typ
+  | LamT of kind * typ (* binds *)
   | TupT of typ list
   | DotT of typ * int
-  | RecT of var * kind * typ
+  | RecT of kind * typ (* binds *)
 
 type exp =
   | VarE of var
@@ -26,10 +28,10 @@ type exp =
   | AppE of exp * exp
   | TupE of exp list
   | DotE of exp * int
-  | GenE of var * kind * exp
+  | GenE of kind * exp (* binds *)
   | InstE of exp * typ
   | PackE of typ * exp * typ
-  | OpenE of exp * var * var * exp
+  | OpenE of exp * var * exp (* binds *)
   | RollE of exp * typ
   | UnrollE of exp
   | RecE of var * typ * exp
@@ -40,15 +42,72 @@ exception Unimplemented
 
 (* Substitutions *)
 
-let lift_kind = raise Unimplemented
-let lift_typ = raise Unimplemented
-let lift_exp = raise Unimplemented
+let rec subst_typ_main m s n l t =
+  match t with
+  | VarT i ->
+    if i < m then
+      t
+    else if i < m + n then
+      subst_typ_main 0 [] 0 m (List.nth s (i - m))
+    else
+      VarT (i - n + l)
+  | LamT (k, t) -> 
+    LamT (k, subst_typ_main (m + 1) s n l t)
+  | AppT (t1, t2) -> 
+    AppT (subst_typ_main m s n l t1, subst_typ_main m s n l t2)
+  | ProdT ts ->
+    ProdT (List.map (subst_typ_main m s n l) ts)
+  | DotT (t, i) ->
+    DotT (subst_typ_main m s n l t, i)
+  | ArrT (t1, t2) ->
+    ArrT (subst_typ_main m s n l t1, subst_typ_main m s n l t2)
+  | AllT (k, t) ->
+    AllT (k, subst_typ_main (m + 1) s n l t)
+  | AnyT (k, t) ->
+    AnyT (k, subst_typ_main (m + 1) s n l t)
+  | TupT ts ->
+    TupT (List.map (subst_typ_main m s n l) ts)
+  | RecT (k, t) ->
+    RecT (k, subst_typ_main (m + 1) s n l t)
+  | PrimT t ->
+    raise Unimplemented
 
-type 'a subst = (var * 'a) list
+let rec subst_exp_main m s n l e =
+  match e with
+  | VarE _ -> e
+  | IfE (e1, e2, e3) ->
+    IfE (subst_exp_main m s n l e1, subst_exp_main m s n l e2, subst_exp_main m s n l e3)
+  | LamE (x, t, e) ->
+    LamE (x, subst_typ_main m s n l t, subst_exp_main m s n l e)
+  | AppE (e1, e2) ->
+    AppE (subst_exp_main m s n l e1, subst_exp_main m s n l e2)
+  | TupE es ->
+    TupE (List.map (subst_exp_main m s n l) es)
+  | DotE (e, i) ->
+    DotE (subst_exp_main m s n l e, i)
+  | GenE (k, e) ->
+    GenE (k, subst_exp_main (m + 1) s n l e)
+  | InstE (e, t) ->
+    InstE (subst_exp_main m s n l e, subst_typ_main m s n l t)
+  | PackE (t1, e, t2) ->
+    PackE (subst_typ_main m s n l t1, subst_exp_main m s n l e, subst_typ_main m s n l t2)
+  | OpenE (e1, v, e2) ->
+    OpenE (subst_exp_main m s n l e1, v, subst_exp_main (m + 1) s n l e2)
+  | RollE (e, t) ->
+    RollE (subst_exp_main m s n l e, subst_typ_main m s n l t)
+  | UnrollE e ->
+    UnrollE (subst_exp_main m s n l e)
+  | RecE (v, t, e) ->
+    RecE (v, subst_typ_main m s n l t, subst_exp_main m s n l e)
+  | LetE (e1, v, e2) ->
+    LetE (subst_exp_main m s n l e1, v, subst_exp_main m s n l e2)
+  | PrimE _ -> e
 
-let subst_typ = raise Unimplemented
-let subst_typ_exp = raise Unimplemented
-let subst_exp = raise Unimplemented
+let lift_typ l t = if l == 0 then t else subst_typ_main 0 [] 0 l t
+let lift_exp l e = if l == 0 then e else subst_exp_main 0 [] 0 l e
+
+let subst_typ s t = subst_typ_main 0 [s] 1 0 t
+let subst_exp s e = subst_exp_main 0 [s] 1 0 e
 
 (* Environments *)
 
@@ -77,7 +136,7 @@ let add_val v t { ksize ; kenv ; tenv } =
     tenv = VarMap.add v (ksize, t) tenv }
 
 let lookup_typ i { ksize ; kenv ; tenv } =
-  try lift_kind (i + 1) (List.nth kenv i) with
+  try List.nth kenv i with
   | Failure _ -> raise (Error "Undefined type variable")
 
 let lookup_val v { ksize ; kenv ; tenv } =
