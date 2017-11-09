@@ -7,6 +7,7 @@ type kind =
   | ArrK of kind * kind
   | ProdK of kind list
 
+(* TODO: change this to use hash consing *)
 type typ = (* de Bruijn representation *)
   | VarT of int
   | PrimT of Prim.typ
@@ -62,13 +63,8 @@ val lookup_val : var -> env -> typ (* raise Error *)
 
 val varT : var * kind -> typ  (* eta-long-normal *)
 
-val norm_typ : typ -> typ (* raise Error *)  (* beta normalisation *)
-val norm_exp : exp -> exp (* raise Error *)
-
+val norm_typ : typ -> typ (* raise Error *) (* total reduction *)
 val equal_typ : typ -> typ -> bool (* raise Error *)
-
-val force_typ : typ -> typ
-
 
 (* Checking *)
 

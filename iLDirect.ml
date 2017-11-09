@@ -103,8 +103,8 @@ let rec subst_exp_main m s n l e =
     LetE (subst_exp_main m s n l e1, v, subst_exp_main m s n l e2)
   | PrimE _ -> e
 
-let lift_typ l t = if l == 0 then t else subst_typ_main 0 [] 0 l t
-let lift_exp l e = if l == 0 then e else subst_exp_main 0 [] 0 l e
+let lift_typ l t = if l = 0 then t else subst_typ_main 0 [] 0 l t
+let lift_exp l e = if l = 0 then e else subst_exp_main 0 [] 0 l e
 
 let subst_typ s t = subst_typ_main 0 [s] 1 0 t
 let subst_exp s e = subst_exp_main 0 [s] 1 0 e
@@ -150,12 +150,45 @@ let lookup_val v { ksize ; kenv ; tenv } =
 
 let varT = raise Unimplemented
 
-let norm_typ = raise Unimplemented
-let norm_exp = raise Unimplemented
+let rec norm_typ t =
+  match t with
+  | VarT _ -> t
+  | PrimT _ -> t
+  | ArrT (t1, t2) -> ArrT (norm_typ t1, norm_typ t2)
+  | ProdT ts -> ProdT (List.map norm_typ ts)
+  | AllT (k, t) -> AllT (k, norm_typ t)
+  | AnyT (k, t) -> AnyT (k, norm_typ t)
+  | LamT (k, t) -> LamT (k, norm_typ t)
+  | AppT (t1, t2) -> 
+    begin match norm_typ t1, norm_typ t2 with
+    | LamT (k, t), t2' -> norm_typ (subst_typ t2' t)
+    | t1', t2' -> AppT (t1', t2')
+    end
+  | TupT ts -> TupT (List.map norm_typ ts)
+  | DotT (t, l) ->
+    begin match norm_typ t with
+    | TupT ts -> norm_typ (List.nth ts l)
+    | t' -> DotT (t', l)
+    end
+  | RecT (k, t) -> RecT (k, norm_typ t)
 
-let equal_typ = raise Unimplemented
+(* TODO: A better implementation would weak-head reduce and compare *)
+let rec equal_typ' t1 t2 =
+  match t1, t2 with
+  | VarT a1, VarT a2 -> a1 = a2
+  | PrimT t1, PrimT t2 -> t1 = t2
+  | ArrT (t11, t12), ArrT (t21, t22) -> equal_typ' t11 t21 && equal_typ' t12 t22
+  | ProdT ts1, ProdT ts2 -> List.for_all2 equal_typ' ts1 ts2
+  | AllT (k1, t1), AllT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
+  | AnyT (k1, t1), AnyT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
+  | LamT (k1, t1), LamT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
+  | AppT (t11, t12), ArrT (t21, t22) -> equal_typ' t11 t21 && equal_typ' t12 t22
+  | TupT ts1, TupT ts2 -> List.for_all2 equal_typ' ts1 ts2
+  | DotT (t1, l1), DotT (t2, l2) -> equal_typ' t1 t2 && l1 = l2
+  | RecT (k1, t1), RecT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
+  | _ -> false
 
-let force_typ = raise Unimplemented
+let equal_typ t1 t2 = equal_typ' (norm_typ t1) (norm_typ t2)
 
 (* Checking *)
 
