@@ -192,11 +192,70 @@ let equal_typ t1 t2 = equal_typ' (norm_typ t1) (norm_typ t2)
 
 (* Checking *)
 
-let infer_typ = raise Unimplemented
-let infer_exp = raise Unimplemented
+let rec infer_typ env typ =
+  match typ with
+  | VarT v -> lookup_typ v env
+  | PrimT t -> BaseK
+  | ArrT (t1, t2) ->
+    check_typ env t1 BaseK "ArrT1"; check_typ env t2 BaseK "ArrT2"; BaseK
+  | ProdT ts -> List.iter (fun t -> check_typ env t BaseK "ProdTi") ts; BaseK
+  | AllT (k, t) -> check_typ (add_typ k env) t BaseK "AllT"; BaseK
+  | AnyT (k, t) -> check_typ (add_typ k env) t BaseK "AnyT"; BaseK
+  | LamT (k, t) -> ArrK (k, infer_typ (add_typ k env) t)
+  | AppT (t1, t2) ->
+    begin match infer_typ env t1 with
+    | ArrK (k2, k) -> check_typ env t2 k2 "AppT2"; k
+    | _ -> raise (Error "AppT1")
+    end
+  | TupT ts -> ProdK (List.map (infer_typ env) ts)
+  | DotT (t, l) ->
+    begin match infer_typ env t with
+    | ProdK ts -> List.nth ts l
+    | _ -> raise (Error "DotT")
+    end
+  | RecT (k, t) -> check_typ (add_typ k env) t k "RecT"; k
 
-let check_typ = raise Unimplemented
-let check_exp = raise Unimplemented
+and check_typ env t k s = if infer_typ env t <> k then raise (Error s)
+
+let infer_prim_typ = function
+  | Prim.VarT -> VarT 0
+  | t -> PrimT t
+
+let infer_prim_typs = function
+  | [t] -> infer_prim_typ t
+  | ts -> ProdT (List.map infer_prim_typ ts)
+
+let infer_prim_fun {Prim.typ = ts1, ts2} =
+  ArrT (infer_prim_typs ts1, infer_prim_typs ts2)
+
+let infer_const = function
+  | Prim.FunV f -> infer_prim_fun f
+  | c -> PrimT (Prim.typ_of_const c)
+
+let rec infer_exp env exp =
+  match exp with
+  | VarE x -> lookup_val x env
+  | PrimE c -> infer_const c
+  | IfE (e1, e2, e3) ->
+    check_exp env e1 (PrimT Prim.BoolT) "IfE1";
+    let t = infer_exp env e2 in
+    check_exp env e3 t "IfE";
+    t
+  | LamE (x, t, e) -> ArrT (t, infer_exp (add_val x t env) e)
+  | AppE (e1, e2) ->
+    begin match infer_exp env e1 with
+    | ArrT (t2, t) -> check_exp env e2 t2 "AppE2"; t
+    | _ -> raise (Error "AppE1")
+    end
+  | TupE es -> ProdT (List.map (infer_exp env) es)
+  | DotE (e, l) ->
+    begin match infer_exp env e with
+    | ProdT ts -> List.nth ts l
+    | _ -> raise (Error "DotE1")
+    end
+
+and check_exp env exp typ s =
+  if not (equal_typ (infer_exp env exp) typ) then raise (Error s)
 
 (* Unrolling *)
 
