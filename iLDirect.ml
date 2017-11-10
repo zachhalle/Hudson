@@ -288,11 +288,9 @@ let rec infer_exp env exp =
   | OpenE (e1, x, e2) ->
     begin match whnf_typ (infer_exp env e1) with
     | AnyT (k, t1) ->
-      let env' = add_val x t1 (add_typ k env) in
-      let t2 = infer_exp env' e2 in
-      let t2' = subst_typ (inhabitant k) t2 in
-      equal_typ_exn t2 (lift_typ 1 t2');
-      t2'
+      let t2 = infer_exp (add_val x t1 (add_typ k env)) e2 in
+      let t2' = subst_typ (VarT 0) t2 in
+      check_typ env t2' BaseK "OpenE2"; t2'
     | _ -> raise (Error "OpenE")
     end
   | RollE (e, t) -> (* TODO: why does fomega use "unroll_typ" *)
