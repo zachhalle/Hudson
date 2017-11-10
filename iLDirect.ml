@@ -172,6 +172,8 @@ let rec norm_typ t =
     end
   | RecT (k, t) -> RecT (k, norm_typ t)
 
+let whnf_typ typ = raise Unimplemented
+
 (* TODO: A better implementation would weak-head reduce and compare *)
 let rec equal_typ' t1 t2 =
   match t1, t2 with
@@ -189,6 +191,11 @@ let rec equal_typ' t1 t2 =
   | _ -> false
 
 let equal_typ t1 t2 = equal_typ' (norm_typ t1) (norm_typ t2)
+let equal_typ_exn t1 t2 =
+  if equal_typ t1 t2 then
+    ()
+  else
+    raise (Error "equal_typ")
 
 (* Checking *)
 
@@ -217,6 +224,10 @@ let rec infer_typ env typ =
 
 and check_typ env t k s = if infer_typ env t <> k then raise (Error s)
 
+let whnf_annot env typ =
+  check_typ env typ BaseK "whnf_annot";
+  whnf_typ env typ
+
 let infer_prim_typ = function
   | Prim.VarT -> VarT 0
   | t -> PrimT t
@@ -232,6 +243,12 @@ let infer_const = function
   | Prim.FunV f -> infer_prim_fun f
   | c -> PrimT (Prim.typ_of_const c)
 
+let rec inhabitant k =
+  match k with
+  | BaseK -> ProdT []
+  | ArrK (k1, k2) -> LamT (k1, inhabitant k2)
+  | ProdK ks -> TupT (List.map inhabitant ks)
+
 let rec infer_exp env exp =
   match exp with
   | VarE x -> lookup_val x env
@@ -243,16 +260,61 @@ let rec infer_exp env exp =
     t
   | LamE (x, t, e) -> ArrT (t, infer_exp (add_val x t env) e)
   | AppE (e1, e2) ->
-    begin match infer_exp env e1 with
+    begin match whnf_typ (infer_exp env e1) with
     | ArrT (t2, t) -> check_exp env e2 t2 "AppE2"; t
     | _ -> raise (Error "AppE1")
     end
   | TupE es -> ProdT (List.map (infer_exp env) es)
   | DotE (e, l) ->
-    begin match infer_exp env e with
+    begin match whnf_typ (infer_exp env e) with
     | ProdT ts -> List.nth ts l
     | _ -> raise (Error "DotE1")
     end
+  | GenE (k, e) -> AllT (k, infer_exp (add_typ k env) e)
+  | InstE (e, t) ->
+    begin match whnf_typ (infer_exp env e) with
+    | AllT (k, t') -> check_typ env t k "InstE"; subst_typ t t'
+    | _ -> raise (Error "InstE")
+    end
+  | PackE (t, e, t') ->
+    check_typ env t' BaseK "PackE";
+    begin match whnf_typ t' with
+    | AnyT (k, t'') ->
+      check_typ env t k "PackE1";
+      check_exp env e (subst_typ t t'') "PackE2";
+      t'
+    | _ -> raise (Error "PackE")
+    end
+  | OpenE (e1, x, e2) ->
+    begin match whnf_typ (infer_exp env e1) with
+    | AnyT (k, t1) ->
+      let env' = add_val x t1 (add_typ k env) in
+      let t2 = infer_exp env' e2 in
+      let t2' = subst_typ (inhabitant k) t2 in
+      equal_typ_exn t2 (lift_typ 1 t2');
+      t2'
+    | _ -> raise (Error "OpenE")
+    end
+  | RollE (e, t) -> (* TODO: why does fomega use "unroll_typ" *)
+    begin match whnf_typ t with
+    | RecT (k, t') -> 
+      check_typ env t k "RecT";
+      check_exp env e (subst_typ t' t) "RecT"; 
+      t
+    | _ -> raise (Error "RollE")
+    end
+  | UnrollE e -> (* TODO: why does fomega use "unroll_typ" *)
+    begin match whnf_typ (infer_exp env e) with
+    | RecT (k, t') as t -> check_typ env t k "RecT"; subst_typ t t'
+    | _ -> raise (Error "UnrollE")
+    end
+  | RecE (x, t, e) ->
+    check_typ env t BaseK "RecE1";
+    check_exp (add_val x t env) e t "RecE2";
+    t
+  | LetE (e1, x, e2) ->
+    let t1 = infer_exp env e1 in
+    infer_exp (add_val x t1 env) e2
 
 and check_exp env exp typ s =
   if not (equal_typ (infer_exp env exp) typ) then raise (Error s)

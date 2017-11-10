@@ -63,7 +63,8 @@ val lookup_val : var -> env -> typ (* raise Error *)
 
 val varT : var * kind -> typ  (* eta-long-normal *)
 
-val norm_typ : typ -> typ (* raise Error *) (* total normalization *)
+val norm_typ : typ -> typ (* raise Error *) (* absolute normalization *)
+val whnf_typ : typ -> typ
 val equal_typ : typ -> typ -> bool (* raise Error *)
 
 (* Checking *)
