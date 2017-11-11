@@ -172,7 +172,20 @@ let rec norm_typ t =
     end
   | RecT (k, t) -> RecT (k, norm_typ t)
 
-let whnf_typ typ = raise Unimplemented
+
+let rec whnf_typ typ =
+  match typ with
+  | AppT (t1, t2) ->
+    begin match whnf_typ t1 with
+    | LamT (_, t1') -> whnf_typ (subst_typ t2 t1')
+    | t1' -> AppT (t1', t2)
+    end
+  | DotT (t, l) ->
+    begin match whnf_typ t with
+    | TupT ts -> whnf_typ (List.nth ts l)
+    | t' -> DotT (t', l)
+    end
+  | _ -> typ
 
 (* TODO: A better implementation would weak-head reduce and compare *)
 let rec equal_typ' t1 t2 =
@@ -191,11 +204,8 @@ let rec equal_typ' t1 t2 =
   | _ -> false
 
 let equal_typ t1 t2 = equal_typ' (norm_typ t1) (norm_typ t2)
-let equal_typ_exn t1 t2 =
-  if equal_typ t1 t2 then
-    ()
-  else
-    raise (Error "equal_typ")
+let equal_typ_exn t1 t2 = 
+  if not (equal_typ t1 t2) then raise (Error "equal_typ")
 
 (* Checking *)
 
@@ -226,7 +236,7 @@ and check_typ env t k s = if infer_typ env t <> k then raise (Error s)
 
 let whnf_annot env typ =
   check_typ env typ BaseK "whnf_annot";
-  whnf_typ env typ
+  whnf_typ typ
 
 let infer_prim_typ = function
   | Prim.VarT -> VarT 0
@@ -323,9 +333,17 @@ let unroll_typ = raise Unimplemented
 
 (* String conversion *)
 
-let verbose_exp_flag = raise Unimplemented
-let verbose_typ_flag = raise Unimplemented
+let verbose_exp_flag = ref true
+let verbose_typ_flag = ref true
 
-let string_of_kind = raise Unimplemented
+let string_of_row string_of r =
+    String.concat ", " (List.map string_of r)
+
+let rec string_of_kind = function
+  | BaseK -> "*"
+  | ArrK (k1, k2) -> "(" ^ string_of_kind k1 ^ "->" ^ string_of_kind k2 ^ ")"
+  | ProdK [] -> "1"
+  | ProdK ks -> "{" ^ string_of_row string_of_kind ks ^ "}"
+
 let string_of_typ = raise Unimplemented
 let string_of_exp = raise Unimplemented
