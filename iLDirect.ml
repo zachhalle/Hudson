@@ -345,5 +345,58 @@ let rec string_of_kind = function
   | ProdK [] -> "1"
   | ProdK ks -> "{" ^ string_of_row string_of_kind ks ^ "}"
 
-let string_of_typ = raise Unimplemented
-let string_of_exp = raise Unimplemented
+let rec string_of_typ = function
+  | VarT(a) -> string_of_int a
+  | PrimT(t) -> Prim.string_of_typ t
+  | ArrT(t1, t2) -> "(" ^ string_of_typ t1 ^ " -> " ^ string_of_typ t2 ^ ")"
+  | ProdT [] -> "1"
+  | ProdT ts -> "x{" ^ string_of_row string_of_typ ts ^ "}"
+  | AllT (k, t) ->
+    "(" ^ "!" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+  | AnyT (k, t) ->
+    "(" ^ "?" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+  | LamT(k, t) ->
+    "(" ^ "\\" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+  | AppT (t1, t2) -> string_of_typ t1 ^ "(" ^ string_of_typ t2 ^ ")"
+  | TupT ts -> "{" ^ string_of_row string_of_typ ts ^ "}"
+  | DotT(t, l) -> string_of_typ t ^ "." ^ string_of_int l
+  | RecT(k, t) ->
+    "(" ^ "@" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+
+let rec string_of_exp = function
+  | VarE x -> string_of_int x
+  | PrimE c -> Prim.string_of_const c
+  | IfE (e1, e2, e3) ->
+    "(if " ^ string_of_exp e1 ^ " then " ^ string_of_exp e2 ^
+      " else " ^ string_of_exp e3 ^ ")"
+  | LamE (x, t, e) ->
+    "(\\" ^ string_of_int x ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
+    ". " ^
+    (if !verbose_exp_flag then string_of_exp e else "_") ^
+    ")"
+  | AppE (e1, e2) -> "(" ^ string_of_exp e1 ^ " " ^ string_of_exp e2 ^ ")"
+  | TupE es -> "{" ^ string_of_row string_of_exp es ^ "}"
+  | DotE (e, l) -> string_of_exp e ^ "." ^ string_of_int l
+  | GenE (k, e) ->
+    "(!" ^ string_of_kind k ^ ". " ^ string_of_exp e ^ ")"
+  | InstE (e, t) -> "(" ^ string_of_exp e ^ " " ^ string_of_typ t ^ ")"
+  | PackE (t1, e, t2) ->
+    "pack(" ^ string_of_typ t1 ^ ", " ^ string_of_exp e ^ ")" ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t2 else "")
+  | OpenE (e1, x, e2) ->
+    "(unpack(" ^ string_of_int x ^ ") = " ^ string_of_exp e1 ^
+    " in " ^ string_of_exp e2 ^ ")"
+  | RollE (e, t) ->
+    "roll(" ^ string_of_exp e ^ ")" ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "")
+  | UnrollE(e) -> "unroll(" ^ string_of_exp e ^ ")"
+  | RecE(x, t, e) ->
+    "(rec " ^ string_of_int x ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
+    ". " ^
+    (if !verbose_exp_flag then string_of_exp e else "_") ^
+    ")"
+  | LetE(e1, x, e2) ->
+    "(let " ^ string_of_int x ^ " = " ^ string_of_exp e1 ^ " in " ^
+      string_of_exp e2 ^ ")"
