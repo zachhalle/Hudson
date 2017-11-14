@@ -336,8 +336,7 @@ let unroll_typ = raise Unimplemented
 let verbose_exp_flag = ref true
 let verbose_typ_flag = ref true
 
-let string_of_row string_of r =
-    String.concat ", " (List.map string_of r)
+let string_of_row string_of r = String.concat ", " (List.map string_of r)
 
 let rec string_of_kind = function
   | BaseK -> "*"
@@ -364,7 +363,7 @@ let rec string_of_typ = function
     "(" ^ "@" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
 
 let rec string_of_exp = function
-  | VarE x -> string_of_int x
+  | VarE x -> "var" ^ string_of_int x
   | PrimE c -> Prim.string_of_const c
   | IfE (e1, e2, e3) ->
     "(if " ^ string_of_exp e1 ^ " then " ^ string_of_exp e2 ^
@@ -377,10 +376,10 @@ let rec string_of_exp = function
     ")"
   | AppE (e1, e2) -> "(" ^ string_of_exp e1 ^ " " ^ string_of_exp e2 ^ ")"
   | TupE es -> "{" ^ string_of_row string_of_exp es ^ "}"
-  | DotE (e, l) -> string_of_exp e ^ "." ^ string_of_int l
+  | DotE (e, l) -> string_of_exp e ^ "._" ^ string_of_int l
   | GenE (k, e) ->
     "(!" ^ string_of_kind k ^ ". " ^ string_of_exp e ^ ")"
-  | InstE (e, t) -> "(" ^ string_of_exp e ^ " " ^ string_of_typ t ^ ")"
+  | InstE (e, t) -> "(" ^ string_of_exp e ^ " [" ^ string_of_typ t ^ "])"
   | PackE (t1, e, t2) ->
     "pack(" ^ string_of_typ t1 ^ ", " ^ string_of_exp e ^ ")" ^
     (if !verbose_typ_flag then ":" ^ string_of_typ t2 else "")
