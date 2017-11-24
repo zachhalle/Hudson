@@ -1,23 +1,27 @@
 (* Syntax *)
 
+type lab = string
 type var = int
+
+type 'a row = (lab * 'a) list
 
 type kind =
   | BaseK
   | ArrK of kind * kind
-  | ProdK of kind list
+  | ProdK of kind row
 
-type typ =
+(* TODO: change this to use hash consing *)
+type typ = (* de Bruijn representation *)
   | VarT of int
   | PrimT of Prim.typ
   | ArrT of typ * typ
-  | ProdT of typ list
+  | ProdT of typ row
   | AllT of kind * typ (* binds *)
   | AnyT of kind * typ (* binds *)
   | AppT of typ * typ
   | LamT of kind * typ (* binds *)
-  | TupT of typ list
-  | DotT of typ * int
+  | TupT of typ row
+  | DotT of typ * lab
   | RecT of kind * typ (* binds *)
 
 type exp =
@@ -26,8 +30,8 @@ type exp =
   | IfE of exp * exp * exp
   | LamE of var * typ * exp
   | AppE of exp * exp
-  | TupE of exp list
-  | DotE of exp * int
+  | TupE of exp row
+  | DotE of exp * lab
   | GenE of kind * exp (* binds *)
   | InstE of exp * typ
   | PackE of typ * exp * typ
@@ -39,6 +43,15 @@ type exp =
 
 exception Error of string
 exception Unimplemented
+
+(* Helpers *)
+
+let lab i = "_" ^ string_of_int i
+let tup_row xs = List.mapi (fun i x -> lab (i + 1), x) xs
+let map_row f r = List.map (fun (l, v) -> l, f v) r
+let iter_row f r = List.iter (fun (l, v) -> f v) r
+let lookup_lab l row =
+  try List.assoc l row with Not_found -> raise (Error ("label " ^ l))
 
 (* Substitutions *)
 
@@ -56,7 +69,7 @@ let rec subst_typ_main m s n l t =
   | AppT (t1, t2) -> 
     AppT (subst_typ_main m s n l t1, subst_typ_main m s n l t2)
   | ProdT ts ->
-    ProdT (List.map (subst_typ_main m s n l) ts)
+    ProdT (map_row (subst_typ_main m s n l) ts)
   | DotT (t, i) ->
     DotT (subst_typ_main m s n l t, i)
   | ArrT (t1, t2) ->
@@ -66,7 +79,7 @@ let rec subst_typ_main m s n l t =
   | AnyT (k, t) ->
     AnyT (k, subst_typ_main (m + 1) s n l t)
   | TupT ts ->
-    TupT (List.map (subst_typ_main m s n l) ts)
+    TupT (map_row (subst_typ_main m s n l) ts)
   | RecT (k, t) ->
     RecT (k, subst_typ_main (m + 1) s n l t)
   | PrimT t ->
@@ -82,7 +95,7 @@ let rec subst_exp_main m s n l e =
   | AppE (e1, e2) ->
     AppE (subst_exp_main m s n l e1, subst_exp_main m s n l e2)
   | TupE es ->
-    TupE (List.map (subst_exp_main m s n l) es)
+    TupE (map_row (subst_exp_main m s n l) es)
   | DotE (e, i) ->
     DotE (subst_exp_main m s n l e, i)
   | GenE (k, e) ->
@@ -155,7 +168,7 @@ let rec norm_typ t =
   | VarT _ -> t
   | PrimT _ -> t
   | ArrT (t1, t2) -> ArrT (norm_typ t1, norm_typ t2)
-  | ProdT ts -> ProdT (List.map norm_typ ts)
+  | ProdT ts -> ProdT (map_row norm_typ ts)
   | AllT (k, t) -> AllT (k, norm_typ t)
   | AnyT (k, t) -> AnyT (k, norm_typ t)
   | LamT (k, t) -> LamT (k, norm_typ t)
@@ -164,10 +177,10 @@ let rec norm_typ t =
     | LamT (k, t), t2' -> norm_typ (subst_typ t2' t)
     | t1', t2' -> AppT (t1', t2')
     end
-  | TupT ts -> TupT (List.map norm_typ ts)
+  | TupT ts -> TupT (map_row norm_typ ts)
   | DotT (t, l) ->
     begin match norm_typ t with
-    | TupT ts -> norm_typ (List.nth ts l)
+    | TupT ts -> norm_typ (lookup_lab l ts)
     | t' -> DotT (t', l)
     end
   | RecT (k, t) -> RecT (k, norm_typ t)
@@ -182,10 +195,13 @@ let rec whnf_typ typ =
     end
   | DotT (t, l) ->
     begin match whnf_typ t with
-    | TupT ts -> whnf_typ (List.nth ts l)
+    | TupT ts -> whnf_typ (lookup_lab l ts)
     | t' -> DotT (t', l)
     end
   | _ -> typ
+
+let equal_row equal r1 r2 =
+  List.for_all2 (fun (l1, z1) (l2, z2) -> l1 = l2 && equal z1 z2) r1 r2
 
 (* TODO: A better implementation would weak-head reduce and compare *)
 let rec equal_typ' t1 t2 =
@@ -193,12 +209,12 @@ let rec equal_typ' t1 t2 =
   | VarT a1, VarT a2 -> a1 = a2
   | PrimT t1, PrimT t2 -> t1 = t2
   | ArrT (t11, t12), ArrT (t21, t22) -> equal_typ' t11 t21 && equal_typ' t12 t22
-  | ProdT ts1, ProdT ts2 -> List.for_all2 equal_typ' ts1 ts2
+  | ProdT ts1, ProdT ts2 -> equal_row equal_typ' ts1 ts2
   | AllT (k1, t1), AllT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
   | AnyT (k1, t1), AnyT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
   | LamT (k1, t1), LamT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
   | AppT (t11, t12), ArrT (t21, t22) -> equal_typ' t11 t21 && equal_typ' t12 t22
-  | TupT ts1, TupT ts2 -> List.for_all2 equal_typ' ts1 ts2
+  | TupT ts1, TupT ts2 -> equal_row equal_typ' ts1 ts2
   | DotT (t1, l1), DotT (t2, l2) -> equal_typ' t1 t2 && l1 = l2
   | RecT (k1, t1), RecT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
   | _ -> false
@@ -215,7 +231,7 @@ let rec infer_typ env typ =
   | PrimT t -> BaseK
   | ArrT (t1, t2) ->
     check_typ env t1 BaseK "ArrT1"; check_typ env t2 BaseK "ArrT2"; BaseK
-  | ProdT ts -> List.iter (fun t -> check_typ env t BaseK "ProdTi") ts; BaseK
+  | ProdT ts -> iter_row (fun t -> check_typ env t BaseK "ProdTi") ts; BaseK
   | AllT (k, t) -> check_typ (add_typ k env) t BaseK "AllT"; BaseK
   | AnyT (k, t) -> check_typ (add_typ k env) t BaseK "AnyT"; BaseK
   | LamT (k, t) -> ArrK (k, infer_typ (add_typ k env) t)
@@ -224,10 +240,10 @@ let rec infer_typ env typ =
     | ArrK (k2, k) -> check_typ env t2 k2 "AppT2"; k
     | _ -> raise (Error "AppT1")
     end
-  | TupT ts -> ProdK (List.map (infer_typ env) ts)
+  | TupT ts -> ProdK (map_row (infer_typ env) ts)
   | DotT (t, l) ->
     begin match infer_typ env t with
-    | ProdK ts -> List.nth ts l
+    | ProdK ts -> lookup_lab l ts
     | _ -> raise (Error "DotT")
     end
   | RecT (k, t) -> check_typ (add_typ k env) t k "RecT"; k
@@ -244,7 +260,7 @@ let infer_prim_typ = function
 
 let infer_prim_typs = function
   | [t] -> infer_prim_typ t
-  | ts -> ProdT (List.map infer_prim_typ ts)
+  | ts -> ProdT (tup_row (List.map infer_prim_typ ts))
 
 let infer_prim_fun {Prim.typ = ts1, ts2} =
   ArrT (infer_prim_typs ts1, infer_prim_typs ts2)
@@ -257,7 +273,7 @@ let rec inhabitant k =
   match k with
   | BaseK -> ProdT []
   | ArrK (k1, k2) -> LamT (k1, inhabitant k2)
-  | ProdK ks -> TupT (List.map inhabitant ks)
+  | ProdK ks -> TupT (map_row inhabitant ks)
 
 let rec infer_exp env exp =
   match exp with
@@ -274,10 +290,10 @@ let rec infer_exp env exp =
     | ArrT (t2, t) -> check_exp env e2 t2 "AppE2"; t
     | _ -> raise (Error "AppE1")
     end
-  | TupE es -> ProdT (List.map (infer_exp env) es)
+  | TupE es -> ProdT (map_row (infer_exp env) es)
   | DotE (e, l) ->
     begin match whnf_typ (infer_exp env e) with
-    | ProdT ts -> List.nth ts l
+    | ProdT ts -> lookup_lab l ts
     | _ -> raise (Error "DotE1")
     end
   | GenE (k, e) -> AllT (k, infer_exp (add_typ k env) e)
@@ -332,20 +348,21 @@ and check_exp env exp typ s =
 let verbose_exp_flag = ref true
 let verbose_typ_flag = ref true
 
-let string_of_row string_of r = String.concat ", " (List.map string_of r)
+let string_of_row sep string_of r =
+    String.concat ", " (List.map (fun (l, z) -> l ^ sep ^ string_of z) r)
 
 let rec string_of_kind = function
   | BaseK -> "*"
   | ArrK (k1, k2) -> "(" ^ string_of_kind k1 ^ "->" ^ string_of_kind k2 ^ ")"
   | ProdK [] -> "1"
-  | ProdK ks -> "{" ^ string_of_row string_of_kind ks ^ "}"
+  | ProdK ks -> "{" ^ string_of_row ":" string_of_kind ks ^ "}"
 
 let rec string_of_typ = function
   | VarT(a) -> string_of_int a
   | PrimT(t) -> Prim.string_of_typ t
   | ArrT(t1, t2) -> "(" ^ string_of_typ t1 ^ " -> " ^ string_of_typ t2 ^ ")"
   | ProdT [] -> "1"
-  | ProdT ts -> "x{" ^ string_of_row string_of_typ ts ^ "}"
+  | ProdT ts -> "x{" ^ string_of_row " : " string_of_typ ts ^ "}"
   | AllT (k, t) ->
     "(" ^ "!" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
   | AnyT (k, t) ->
@@ -353,8 +370,8 @@ let rec string_of_typ = function
   | LamT(k, t) ->
     "(" ^ "\\" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
   | AppT (t1, t2) -> string_of_typ t1 ^ "(" ^ string_of_typ t2 ^ ")"
-  | TupT ts -> "{" ^ string_of_row string_of_typ ts ^ "}"
-  | DotT(t, l) -> string_of_typ t ^ "." ^ string_of_int l
+  | TupT ts -> "{" ^ string_of_row " = " string_of_typ ts ^ "}"
+  | DotT(t, l) -> string_of_typ t ^ "." ^ l
   | RecT(k, t) ->
     "(" ^ "@" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
 
@@ -371,8 +388,8 @@ let rec string_of_exp = function
     (if !verbose_exp_flag then string_of_exp e else "_") ^
     ")"
   | AppE (e1, e2) -> "(" ^ string_of_exp e1 ^ " " ^ string_of_exp e2 ^ ")"
-  | TupE es -> "{" ^ string_of_row string_of_exp es ^ "}"
-  | DotE (e, l) -> string_of_exp e ^ "._" ^ string_of_int l
+  | TupE es -> "{" ^ string_of_row " = " string_of_exp es ^ "}"
+  | DotE (e, l) -> string_of_exp e ^ "." ^ l
   | GenE (k, e) ->
     "(!" ^ string_of_kind k ^ ". " ^ string_of_exp e ^ ")"
   | InstE (e, t) -> "(" ^ string_of_exp e ^ " [" ^ string_of_typ t ^ "])"

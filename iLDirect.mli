@@ -1,24 +1,27 @@
 (* Syntax *)
 
+type lab = string
 type var = int
+
+type 'a row = (lab * 'a) list
 
 type kind =
   | BaseK
   | ArrK of kind * kind
-  | ProdK of kind list
+  | ProdK of kind row
 
 (* TODO: change this to use hash consing *)
 type typ = (* de Bruijn representation *)
   | VarT of int
   | PrimT of Prim.typ
   | ArrT of typ * typ
-  | ProdT of typ list
+  | ProdT of typ row
   | AllT of kind * typ (* binds *)
   | AnyT of kind * typ (* binds *)
   | AppT of typ * typ
   | LamT of kind * typ (* binds *)
-  | TupT of typ list
-  | DotT of typ * int
+  | TupT of typ row
+  | DotT of typ * lab
   | RecT of kind * typ (* binds *)
 
 type exp =
@@ -27,8 +30,8 @@ type exp =
   | IfE of exp * exp * exp
   | LamE of var * typ * exp
   | AppE of exp * exp
-  | TupE of exp list
-  | DotE of exp * int
+  | TupE of exp row
+  | DotE of exp * lab
   | GenE of kind * exp (* binds *)
   | InstE of exp * typ
   | PackE of typ * exp * typ
