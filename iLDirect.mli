@@ -75,12 +75,6 @@ val infer_exp : env -> exp -> typ (* raise Error *)
 val check_typ : env -> typ -> kind -> string -> unit (* raise Error *)
 val check_exp : env -> exp -> typ -> string -> unit (* raise Error *)
 
-
-(* Unrolling *)
-
-val unroll_typ : typ -> typ option
-
-
 (* String conversion *)
 
 val verbose_exp_flag : bool ref

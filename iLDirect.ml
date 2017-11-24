@@ -148,7 +148,7 @@ let lookup_val v { ksize ; kenv ; tenv } =
 
 (* Normalisation and Equality *)
 
-let varT = raise Unimplemented
+let varT x = raise Unimplemented
 
 let rec norm_typ t =
   match t with
@@ -326,10 +326,6 @@ let rec infer_exp env exp =
 
 and check_exp env exp typ s =
   if not (equal_typ (infer_exp env exp) typ) then raise (Error s)
-
-(* Unrolling *)
-
-let unroll_typ = raise Unimplemented
 
 (* String conversion *)
 
