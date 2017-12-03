@@ -102,14 +102,17 @@ let rec translate_exp env exp =
   | F.LamE (v, t, e) ->
     let v', env' = add_val v env in
     D.LamE (v', translate_typ env' t, translate_exp env' e)
-  | F.AppE (e1, e2) -> D.AppE (translate_exp env exp, translate_exp env exp)
+  | F.AppE (e1, e2) -> D.AppE (translate_exp env e1, translate_exp env e2)
   | F.TupE er -> D.TupE (map_row (translate_exp env) er)
   | F.DotE (e, l) -> D.DotE (translate_exp env e, l)
   | F.GenE (v, k, e) -> 
     D.GenE (translate_kind k, translate_exp (add_typ v env) e)
   | F.InstE (e, t) -> D.InstE (translate_exp env e, translate_typ env t)
-  | F.PackE _ -> raise Unimplemented
-  | F.OpenE _ -> raise Unimplemented
+  | F.PackE (t, e, t') -> 
+    D.PackE (translate_typ env t, translate_exp env e, translate_typ env t')
+  | F.OpenE (e1, a, x, e2) ->
+    let x', env' = add_val x (add_typ a env) in
+    D.OpenE (translate_exp env e1, x', translate_exp env' e2)
   | F.RollE (e, t) -> D.RollE (translate_exp env e, translate_typ env t)
   | F.UnrollE e -> D.UnrollE (translate_exp env e)
   | F.RecE (v, t, e) ->
@@ -119,4 +122,8 @@ let rec translate_exp env exp =
     let v', env' = add_val v env in
     D.LetE (translate_exp env e1, v', translate_exp env' e2)
 
-let translate exp = translate_exp empty exp
+let translate exp = 
+  let typ = F.infer_exp F.empty exp in
+  let exp' = translate_exp empty exp in
+  let () = D.check_exp D.empty exp' (translate_typ empty typ) "debruijnify" in
+  exp'
