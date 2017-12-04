@@ -7,7 +7,7 @@ type typ =
   | IntT
   | CharT
   | TextT
-  | VarT
+  | VarT of string
 
 type const =
   | BoolV of bool
@@ -34,7 +34,7 @@ let string_of_typ = function
   | IntT -> "int"
   | CharT -> "char"
   | TextT -> "text"
-  | VarT -> assert false
+  | VarT _ -> assert false
 
 let typ_of_const = function
   | BoolV _ -> BoolT
@@ -50,17 +50,22 @@ let string_of_const = function
   | TextV(t) -> "\"" ^ String.escaped t ^ "\""
   | FunV(f) -> "(prim " ^ f.name ^ ")"
 
-let is_poly {typ = ts1, ts2} = List.mem VarT ts1 || List.mem VarT ts2
+let is_poly {typ = ts1, ts2} = 
+  let is_var = function
+    | VarT _ -> true
+    | _ -> false
+  in
+  List.exists is_var ts1 || List.exists is_var ts2
 
 let typs = [BoolT; IntT; CharT; TextT]
 
 let funs =
   [
     {name = "==";
-      typ = [VarT; VarT], [BoolT];
+      typ = [VarT "a"; VarT "a"], [BoolT];
       fn = fun [x1; x2] -> [BoolV(x1 = x2)]};
     {name = "<>";
-      typ = [VarT; VarT], [BoolT];
+      typ = [VarT "a"; VarT "a"], [BoolT];
       fn = fun [x1; x2] -> [BoolV(x1 <> x2)]};
 
     {name = "true";

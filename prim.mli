@@ -9,7 +9,7 @@ type typ =
   | IntT
   | CharT
   | TextT
-  | VarT
+  | VarT of string
 
 type const =
   | BoolV of bool

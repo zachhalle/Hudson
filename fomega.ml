@@ -336,7 +336,7 @@ let rec infer_typ env = function
 and check_typ env t k s = if infer_typ env t <> k then raise (Error s)
 
 let infer_prim_typ = function
-  | Prim.VarT -> VarT("a")
+  | Prim.VarT v -> VarT v
   | t -> PrimT(t)
 
 let infer_prim_typs = function

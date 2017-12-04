@@ -255,7 +255,7 @@ let whnf_annot env typ =
   whnf_typ typ
 
 let infer_prim_typ = function
-  | Prim.VarT -> VarT 0
+  | Prim.VarT _ -> VarT 0
   | t -> PrimT t
 
 let infer_prim_typs = function

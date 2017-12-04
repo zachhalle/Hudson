@@ -313,7 +313,7 @@ and elab_instvar env var =
   instantiate env (lookup_var env var) (IL.VarE(var.it))
 
 and elab_prim_typ = function
-  | Prim.VarT -> VarT("a", BaseK)
+  | Prim.VarT v -> VarT(v, BaseK)
   | t -> PrimT(t)
 
 and elab_prim_typs = function
