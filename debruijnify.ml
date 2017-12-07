@@ -19,10 +19,7 @@ module Env : sig
 
   val empty : env
   val add_typ : F.var -> env -> env
-  val add_val : F.var -> env -> D.var * env
-
   val lookup_typ : F.var -> env -> depth
-  val lookup_val : F.var -> env -> D.var
 
 end = struct
 
@@ -30,39 +27,18 @@ end = struct
 
   type env =
     { ksize : int ;
-      tenv : int VarMap.t ;
-      venv : int VarMap.t }
+      tenv : int VarMap.t }
 
   type depth = int
 
-  let fresh =
-    let r = ref 0 in
-    let f () =
-      let n = !r in
-      r := n + 1;
-      n
-    in
-    f
+  let empty = { ksize = 0 ; tenv = VarMap.empty }
 
-  let empty = { ksize = 0 ; tenv = VarMap.empty ; venv = VarMap.empty }
-
-  let add_typ var { ksize ; tenv ; venv } =
+  let add_typ var { ksize ; tenv } =
     { ksize = ksize + 1 ;
-      tenv = VarMap.add var ksize tenv ;
-      venv = venv }
+      tenv = VarMap.add var ksize tenv }
 
-  let add_val var { ksize ; tenv ; venv } =
-    let f = fresh () in
-    (f, { ksize = ksize ;
-          tenv = tenv ;
-          venv = VarMap.add var f venv } )
-
-  let lookup_typ var { ksize ; tenv ; venv } =
+  let lookup_typ var { ksize ; tenv } =
     try VarMap.find var tenv with
-    | Not_found -> raise (Error "Undefined variable")
-
-  let lookup_val var { ksize ; tenv ; venv } =
-    try VarMap.find var venv with
     | Not_found -> raise (Error "Undefined variable")
 
 end
@@ -95,13 +71,11 @@ let rec translate_typ env typ =
 
 let rec translate_exp env exp =
   match exp with
-  | F.VarE v -> D.VarE (lookup_val v env)
+  | F.VarE v -> D.VarE v
   | F.PrimE c -> D.PrimE c
   | F.IfE (e1, e2, e3) ->
     D.IfE (translate_exp env e1, translate_exp env e2, translate_exp env e3)
-  | F.LamE (v, t, e) ->
-    let v', env' = add_val v env in
-    D.LamE (v', translate_typ env' t, translate_exp env' e)
+  | F.LamE (v, t, e) -> D.LamE (v, translate_typ env t, translate_exp env e)
   | F.AppE (e1, e2) -> D.AppE (translate_exp env e1, translate_exp env e2)
   | F.TupE er -> D.TupE (map_row (translate_exp env) er)
   | F.DotE (e, l) -> D.DotE (translate_exp env e, l)
@@ -111,16 +85,13 @@ let rec translate_exp env exp =
   | F.PackE (t, e, t') -> 
     D.PackE (translate_typ env t, translate_exp env e, translate_typ env t')
   | F.OpenE (e1, a, x, e2) ->
-    let x', env' = add_val x (add_typ a env) in
-    D.OpenE (translate_exp env e1, x', translate_exp env' e2)
+    let env' = add_typ a env in
+    D.OpenE (translate_exp env e1, x, translate_exp env' e2)
   | F.RollE (e, t) -> D.RollE (translate_exp env e, translate_typ env t)
   | F.UnrollE e -> D.UnrollE (translate_exp env e)
-  | F.RecE (v, t, e) ->
-    let v', env' = add_val v env in
-    D.RecE (v', translate_typ env' t, translate_exp env' e)
-  | F.LetE (e1, v, e2) ->
-    let v', env' = add_val v env in
-    D.LetE (translate_exp env e1, v', translate_exp env' e2)
+  | F.RecE (v, t, e) -> D.RecE (v, translate_typ env t, translate_exp env e)
+  | F.LetE (e1, v, e2) -> 
+    D.LetE (translate_exp env e1, v, translate_exp env e2)
 
 let translate exp = 
   let typ = F.infer_exp F.empty exp in

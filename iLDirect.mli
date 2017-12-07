@@ -1,7 +1,7 @@
 (* Syntax *)
 
 type lab = string
-type var = int
+type var = string
 
 type 'a row = (lab * 'a) list
 
@@ -59,7 +59,7 @@ val empty : env
 val add_typ : kind -> env -> env
 val add_val : var -> typ -> env -> env
 
-val lookup_typ : var -> env -> kind (* raise Error *)
+val lookup_typ : int -> env -> kind (* raise Error *)
 val lookup_val : var -> env -> typ (* raise Error *)
 
 (* Normalisation and Equality *)

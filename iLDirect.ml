@@ -1,7 +1,7 @@
 (* Syntax *)
 
 type lab = string
-type var = int
+type var = string
 
 type 'a row = (lab * 'a) list
 
@@ -124,12 +124,7 @@ let subst_exp s e = subst_exp_main 0 [s] 1 0 e
 
 (* Environments *)
 
-module IntKey = struct
-  type t = int
-  let compare = compare
-end
-
-module VarMap = Map.Make(IntKey)
+module VarMap = Map.Make(String)
 
 type env = 
   { ksize : int ; 
@@ -376,13 +371,13 @@ let rec string_of_typ = function
     "(" ^ "@" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
 
 let rec string_of_exp = function
-  | VarE x -> "var" ^ string_of_int x
+  | VarE x -> "var" ^ x
   | PrimE c -> Prim.string_of_const c
   | IfE (e1, e2, e3) ->
     "(if " ^ string_of_exp e1 ^ " then " ^ string_of_exp e2 ^
       " else " ^ string_of_exp e3 ^ ")"
   | LamE (x, t, e) ->
-    "(\\" ^ string_of_int x ^
+    "(\\" ^ x ^
     (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
     ". " ^
     (if !verbose_exp_flag then string_of_exp e else "_") ^
@@ -397,18 +392,16 @@ let rec string_of_exp = function
     "pack(" ^ string_of_typ t1 ^ ", " ^ string_of_exp e ^ ")" ^
     (if !verbose_typ_flag then ":" ^ string_of_typ t2 else "")
   | OpenE (e1, x, e2) ->
-    "(unpack(" ^ string_of_int x ^ ") = " ^ string_of_exp e1 ^
-    " in " ^ string_of_exp e2 ^ ")"
+    "(unpack(" ^ x ^ ") = " ^ string_of_exp e1 ^ " in " ^ string_of_exp e2 ^ ")"
   | RollE (e, t) ->
     "roll(" ^ string_of_exp e ^ ")" ^
     (if !verbose_typ_flag then ":" ^ string_of_typ t else "")
   | UnrollE(e) -> "unroll(" ^ string_of_exp e ^ ")"
   | RecE(x, t, e) ->
-    "(rec " ^ string_of_int x ^
+    "(rec " ^ x ^
     (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
     ". " ^
     (if !verbose_exp_flag then string_of_exp e else "_") ^
     ")"
   | LetE(e1, x, e2) ->
-    "(let " ^ string_of_int x ^ " = " ^ string_of_exp e1 ^ " in " ^
-      string_of_exp e2 ^ ")"
+    "(let " ^ x ^ " = " ^ string_of_exp e1 ^ " in " ^ string_of_exp e2 ^ ")"
