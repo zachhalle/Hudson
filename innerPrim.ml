@@ -1,10 +1,12 @@
 module Prim = struct
 
   type const =
+    | BoolV of bool
+    | TextV of string
+    | IntV of int
+    | CharV of char
     | Eq
     | NotEq
-    | True
-    | False
     | Plus
     | Minus
     | Times
@@ -37,10 +39,12 @@ module Prim = struct
 
   let typ_of_const c =
     match c with
+    | BoolV _ -> [], [BoolT]
+    | TextV _ -> [], [TextT]
+    | IntV _ -> [], [IntT]
+    | CharV _ -> [], [CharT]
     | Eq -> [VarT 0; VarT 0], [BoolT]
     | NotEq -> [VarT 0; VarT 0], [BoolT]
-    | True -> [], [BoolT]
-    | False -> [], [BoolT]
     | Plus -> [IntT; IntT], [IntT]
     | Minus -> [IntT; IntT], [IntT]
     | Times -> [IntT; IntT], [IntT]
@@ -74,10 +78,12 @@ module Prim = struct
 
   let string_of_const c =
     match c with
+    | BoolV b -> string_of_bool b
+    | CharV c -> "'" ^ Char.escaped c ^ "'"
+    | IntV i -> string_of_int i
+    | TextV t -> "\"" ^ String.escaped t ^ "\""
     | Eq -> "=="
     | NotEq -> "<>"
-    | True -> "true"
-    | False -> "false"
     | Plus -> "Int.+"
     | Minus -> "Int.-"
     | Times -> "Int.*"
@@ -100,7 +106,6 @@ module Prim = struct
     | TextSub -> "Text.sub"
     | TextFromChar -> "Text.fromChar"
     | TextPrint -> "Text.print"
-
 
   module type InferArg = sig
     type typExt

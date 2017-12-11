@@ -84,8 +84,14 @@ let rec subst_typ_main m s n l t =
     TupT (map_row (subst_typ_main m s n l) ts)
   | RecT (k, t) ->
     RecT (k, subst_typ_main (m + 1) s n l t)
-  | PrimT t ->
-    raise Unimplemented
+  | PrimT (Prim.VarT i) ->
+    if i < m then
+      t
+    else if i < m + n then
+      subst_typ_main 0 [] 0 m (List.nth s (i - m))
+    else
+      PrimT (Prim.VarT (i - n + l))
+  | PrimT _ -> t
 
 let rec subst_exp_main m s n l e =
   match e with

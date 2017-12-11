@@ -49,10 +49,18 @@ let rec force_typ = function
   | F.InferT(t', _) -> force_typ (Lazy.force t')
   | t -> t
 
+let translate_prim_typ env p =
+  match p with
+  | Prim.BoolT -> InnerPrim.Prim.BoolT
+  | Prim.IntT -> InnerPrim.Prim.IntT
+  | Prim.CharT -> InnerPrim.Prim.CharT
+  | Prim.TextT -> InnerPrim.Prim.TextT
+  | Prim.VarT v -> InnerPrim.Prim.VarT (lookup_typ v env)
+
 let rec translate_typ env typ =
   match typ with
   | F.VarT v -> D.VarT (lookup_typ v env)
-  | F.PrimT t -> raise Unimplemented
+  | F.PrimT t -> D.PrimT (translate_prim_typ env t)
   | F.ArrT (t1, t2) -> 
     D.ArrT (translate_typ env t1, translate_typ env t2)
   | F.ProdT tr -> D.ProdT (map_row (translate_typ env) tr)
@@ -69,10 +77,55 @@ let rec translate_typ env typ =
     D.RecT (translate_kind k, translate_typ (add_typ v env) t)
   | F.InferT _ -> translate_typ env (force_typ typ)
 
+let translate_prim_fun (f : Prim.func) =
+  match f.name with
+  | "==" -> InnerPrim.Prim.Eq
+  | "<>" -> InnerPrim.Prim.NotEq
+  | "true" -> assert false
+  | "false" -> assert false
+  | "Int.+" -> InnerPrim.Prim.Plus
+  | "Int.-" -> InnerPrim.Prim.Minus
+  | "Int.*" -> InnerPrim.Prim.Times
+  | "Int./" -> InnerPrim.Prim.Div
+  | "Int.%" -> InnerPrim.Prim.Mod
+  | "Int.<" -> InnerPrim.Prim.LT
+  | "Int.>" -> InnerPrim.Prim.GT
+  | "Int.<=" -> InnerPrim.Prim.LTE
+  | "Int.>=" -> InnerPrim.Prim.GTE
+  | "Int.print" -> InnerPrim.Prim.IntPrint
+  | "Char.toInt" -> InnerPrim.Prim.CharToInt
+  | "Char.fromInt" -> InnerPrim.Prim.CharFromInt
+  | "Char.print" -> InnerPrim.Prim.CharPrint
+  | "Text.++" -> InnerPrim.Prim.TextConcat
+  | "Text.<" -> InnerPrim.Prim.LT
+  | "Text.>" -> InnerPrim.Prim.GT
+  | "Text.<=" -> InnerPrim.Prim.LTE
+  | "Text.>=" -> InnerPrim.Prim.GTE
+  | "Text.length" -> InnerPrim.Prim.TextLength
+  | "Text.sub" -> InnerPrim.Prim.TextSub
+  | "Text.fromChar" -> InnerPrim.Prim.TextFromChar
+  | "Text.print" -> InnerPrim.Prim.TextPrint
+  | s -> raise (Error ("Undefined primitive constant: " ^ s))
+
+let translate_prim_const c =
+  match c with
+  | Prim.BoolV b -> InnerPrim.Prim.BoolV b
+  | Prim.IntV i -> InnerPrim.Prim.IntV i
+  | Prim.CharV c -> InnerPrim.Prim.CharV c
+  | Prim.TextV t -> InnerPrim.Prim.TextV t
+  | Prim.FunV f -> translate_prim_fun f
+
 let rec translate_exp env exp =
   match exp with
   | F.VarE v -> D.VarE v
-  | F.PrimE c -> raise Unimplemented
+  | F.PrimE c -> 
+    begin match c with
+    | Prim.FunV (f : Prim.func) when f.name = "true" -> 
+      D.LamE ("", D.TupT [], D.PrimE (InnerPrim.Prim.BoolV true))
+    | Prim.FunV (f : Prim.func) when f.name = "false" -> 
+      D.LamE ("", D.TupT [], D.PrimE (InnerPrim.Prim.BoolV false))
+    | _ -> D.PrimE (translate_prim_const c)
+    end 
   | F.IfE (e1, e2, e3) ->
     D.IfE (translate_exp env e1, translate_exp env e2, translate_exp env e3)
   | F.LamE (v, t, e) -> D.LamE (v, translate_typ env t, translate_exp env e)
@@ -93,8 +146,13 @@ let rec translate_exp env exp =
   | F.LetE (e1, v, e2) -> 
     D.LetE (translate_exp env e1, v, translate_exp env e2)
 
-let translate exp = 
-  let typ = F.infer_exp F.empty exp in
-  let exp' = translate_exp empty exp in
-  let () = D.check_exp D.empty exp' (translate_typ empty typ) "debruijnify" in
-  exp'
+let type_check = ref false
+
+let translate exp =
+  if !type_check then
+    let typ = F.infer_exp F.empty exp in
+    let exp' = translate_exp empty exp in
+    let () = D.check_exp D.empty exp' (translate_typ empty typ) "debruijnify" in
+    exp'
+  else
+    translate_exp empty exp

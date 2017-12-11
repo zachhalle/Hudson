@@ -1,9 +1,11 @@
 module Prim : sig
   type const =
+    | BoolV of bool
+    | TextV of string
+    | IntV of int
+    | CharV of char
     | Eq
     | NotEq
-    | True
-    | False
     | Plus
     | Minus
     | Times
