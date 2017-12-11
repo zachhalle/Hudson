@@ -52,7 +52,7 @@ let rec force_typ = function
 let rec translate_typ env typ =
   match typ with
   | F.VarT v -> D.VarT (lookup_typ v env)
-  | F.PrimT t -> D.PrimT t
+  | F.PrimT t -> raise Unimplemented
   | F.ArrT (t1, t2) -> 
     D.ArrT (translate_typ env t1, translate_typ env t2)
   | F.ProdT tr -> D.ProdT (map_row (translate_typ env) tr)
@@ -72,7 +72,7 @@ let rec translate_typ env typ =
 let rec translate_exp env exp =
   match exp with
   | F.VarE v -> D.VarE v
-  | F.PrimE c -> D.PrimE c
+  | F.PrimE c -> raise Unimplemented
   | F.IfE (e1, e2, e3) ->
     D.IfE (translate_exp env e1, translate_exp env e2, translate_exp env e3)
   | F.LamE (v, t, e) -> D.LamE (v, translate_typ env t, translate_exp env e)

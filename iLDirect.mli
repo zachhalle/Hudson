@@ -13,7 +13,7 @@ type kind =
 (* TODO: change this to use hash consing *)
 type typ = (* de Bruijn representation *)
   | VarT of int
-  | PrimT of Prim.typ
+  | PrimT of InnerPrim.Prim.typ
   | ArrT of typ * typ
   | ProdT of typ row
   | AllT of kind * typ (* binds *)
@@ -26,7 +26,7 @@ type typ = (* de Bruijn representation *)
 
 type exp =
   | VarE of var
-  | PrimE of Prim.const
+  | PrimE of InnerPrim.Prim.const
   | IfE of exp * exp * exp
   | LamE of var * typ * exp
   | AppE of exp * exp

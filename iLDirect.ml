@@ -10,6 +10,8 @@ type kind =
   | ArrK of kind * kind
   | ProdK of kind row
 
+open InnerPrim
+
 (* TODO: change this to use hash consing *)
 type typ = (* de Bruijn representation *)
   | VarT of int
@@ -249,31 +251,20 @@ let whnf_annot env typ =
   check_typ env typ BaseK "whnf_annot";
   whnf_typ typ
 
-let infer_prim_typ = function
-  | Prim.VarT _ -> VarT 0
-  | t -> PrimT t
-
-let infer_prim_typs = function
-  | [t] -> infer_prim_typ t
-  | ts -> ProdT (tup_row (List.map infer_prim_typ ts))
-
-let infer_prim_fun {Prim.typ = ts1, ts2} =
-  ArrT (infer_prim_typs ts1, infer_prim_typs ts2)
-
-let infer_const = function
-  | Prim.FunV f -> infer_prim_fun f
-  | c -> PrimT (Prim.typ_of_const c)
-
-let rec inhabitant k =
-  match k with
-  | BaseK -> ProdT []
-  | ArrK (k1, k2) -> LamT (k1, inhabitant k2)
-  | ProdK ks -> TupT (map_row inhabitant ks)
+module InferPrim = Prim.MakeInfer (
+  struct 
+    type typExt = typ
+    let primT t = PrimT t
+    let varT i = VarT i
+    let arrT t1 t2 = ArrT (t1, t2)
+    let tupT ts = TupT ts
+  end
+) 
 
 let rec infer_exp env exp =
   match exp with
   | VarE x -> lookup_val x env
-  | PrimE c -> infer_const c
+  | PrimE c -> InferPrim.infer_prim c
   | IfE (e1, e2, e3) ->
     check_exp env e1 (PrimT Prim.BoolT) "IfE1";
     let t = infer_exp env e2 in
