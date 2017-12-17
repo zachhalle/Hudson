@@ -95,11 +95,11 @@ module Prim = struct
     | GTE -> "Int.>="
     | IntPrint -> "Int.print"
     | CharToInt -> "Char.toInt"
-    | CharFromInt -> "Char.print"
-    | CharPrint -> "Text.++"
-    | TextConcat -> "Text.<"
-    | TextLT -> "Text.>"
-    | TextGT -> "Text.<"
+    | CharFromInt -> "Char.fromInt"
+    | CharPrint -> "Char.print"
+    | TextConcat -> "Text.++"
+    | TextLT -> "Text.<"
+    | TextGT -> "Text.>"
     | TextLTE -> "Text.<="
     | TextGTE -> "Text.>="
     | TextLength -> "Text.length"
@@ -136,7 +136,6 @@ module Prim = struct
 
     let infer_prim c =
       match typ_of_const c with
-      | [], [] -> assert false
       | [t1], [t2] -> arrT (outT t1) (outT t2)
       | [t1], ts -> arrT (outT t1) (row_out ts)
       | ts, [t2] -> arrT (row_out ts) (outT t2)

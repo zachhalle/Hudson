@@ -149,10 +149,14 @@ let rec translate_exp env exp =
 let type_check = ref false
 
 let translate exp =
-  if !type_check then
+  if !type_check then begin
+    print_endline "debruijnify: checking f";
     let typ = F.infer_exp F.empty exp in
+    print_endline "debruijnify: translate";
     let exp' = translate_exp empty exp in
+    print_endline "debruijnify: check direct";
     let () = D.check_exp D.empty exp' (translate_typ empty typ) "debruijnify" in
+    print_endline "debruijnify: finished";
     exp'
-  else
+  end else
     translate_exp empty exp
