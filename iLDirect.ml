@@ -44,6 +44,7 @@ type exp =
   | LetE of exp * var * exp
 
 exception Error of string
+exception TypeCheck of exp * typ * typ
 exception Unimplemented
 
 (* Helpers *)
@@ -54,6 +55,74 @@ let map_row f r = List.map (fun (l, v) -> l, f v) r
 let iter_row f r = List.iter (fun (l, v) -> f v) r
 let lookup_lab l row =
   try List.assoc l row with Not_found -> raise (Error ("label " ^ l))
+
+(* String conversion *)
+
+let verbose_exp_flag = ref true
+let verbose_typ_flag = ref true
+
+let string_of_row sep string_of r =
+    String.concat ", " (List.map (fun (l, z) -> l ^ sep ^ string_of z) r)
+
+let rec string_of_kind = function
+  | BaseK -> "*"
+  | ArrK (k1, k2) -> "(" ^ string_of_kind k1 ^ "->" ^ string_of_kind k2 ^ ")"
+  | ProdK [] -> "1"
+  | ProdK ks -> "{" ^ string_of_row ":" string_of_kind ks ^ "}"
+
+let rec string_of_typ = function
+  | VarT(a) -> "(tvar " ^ string_of_int a ^ ")"
+  | PrimT(t) -> Prim.string_of_typ t
+  | ArrT(t1, t2) -> "(" ^ string_of_typ t1 ^ " -> " ^ string_of_typ t2 ^ ")"
+  | ProdT [] -> "1"
+  | ProdT ts -> "x{" ^ string_of_row " : " string_of_typ ts ^ "}"
+  | AllT (k, t) ->
+    "(" ^ "!" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+  | AnyT (k, t) ->
+    "(" ^ "?" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+  | LamT(k, t) ->
+    "(" ^ "\\" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+  | AppT (t1, t2) -> string_of_typ t1 ^ "(" ^ string_of_typ t2 ^ ")"
+  | TupT ts -> "{" ^ string_of_row " = " string_of_typ ts ^ "}"
+  | DotT(t, l) -> string_of_typ t ^ "." ^ l
+  | RecT(k, t) ->
+    "(" ^ "@" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+
+let rec string_of_exp = function
+  | VarE x -> "(var" ^ x ^ ")"
+  | PrimE c -> "(prim" ^ Prim.string_of_const c ^ ")"
+  | IfE (e1, e2, e3) ->
+    "(if " ^ string_of_exp e1 ^ " then " ^ string_of_exp e2 ^
+      " else " ^ string_of_exp e3 ^ ")"
+  | LamE (x, t, e) ->
+    "(\\" ^ x ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
+    ". " ^
+    (if !verbose_exp_flag then string_of_exp e else "_") ^
+    ")"
+  | AppE (e1, e2) -> "(" ^ string_of_exp e1 ^ " " ^ string_of_exp e2 ^ ")"
+  | TupE es -> "{" ^ string_of_row " = " string_of_exp es ^ "}"
+  | DotE (e, l) -> string_of_exp e ^ "." ^ l
+  | GenE (k, e) ->
+    "(!" ^ string_of_kind k ^ ". " ^ string_of_exp e ^ ")"
+  | InstE (e, t) -> "(" ^ string_of_exp e ^ " [" ^ string_of_typ t ^ "])"
+  | PackE (t1, e, t2) ->
+    "pack(" ^ string_of_typ t1 ^ ", " ^ string_of_exp e ^ ")" ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t2 else "")
+  | OpenE (e1, x, e2) ->
+    "(unpack(" ^ x ^ ") = " ^ string_of_exp e1 ^ " in " ^ string_of_exp e2 ^ ")"
+  | RollE (e, t) ->
+    "roll(" ^ string_of_exp e ^ ")" ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "")
+  | UnrollE(e) -> "unroll(" ^ string_of_exp e ^ ")"
+  | RecE(x, t, e) ->
+    "(rec " ^ x ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
+    ". " ^
+    (if !verbose_exp_flag then string_of_exp e else "_") ^
+    ")"
+  | LetE(e1, x, e2) ->
+    "(let " ^ x ^ " = " ^ string_of_exp e1 ^ " in " ^ string_of_exp e2 ^ ")"
 
 (* Substitutions *)
 
@@ -216,7 +285,7 @@ let rec equal_typ' t1 t2 =
   | AllT (k1, t1), AllT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
   | AnyT (k1, t1), AnyT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
   | LamT (k1, t1), LamT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
-  | AppT (t11, t12), ArrT (t21, t22) -> equal_typ' t11 t21 && equal_typ' t12 t22
+  | AppT (t11, t12), AppT (t21, t22) -> equal_typ' t11 t21 && equal_typ' t12 t22
   | TupT ts1, TupT ts2 -> equal_row equal_typ' ts1 ts2
   | DotT (t1, l1), DotT (t2, l2) -> equal_typ' t1 t2 && l1 = l2
   | RecT (k1, t1), RecT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
@@ -251,7 +320,14 @@ let rec infer_typ env typ =
     end
   | RecT (k, t) -> check_typ (add_typ k env) t k "RecT"; k
 
-and check_typ env t k s = if infer_typ env t <> k then raise (Error s)
+and check_typ env t k s = 
+  let inferred = infer_typ env t in
+  if inferred <> k then begin 
+    print_endline ("Checking typ: " ^ string_of_typ t);
+    print_endline ("Got: " ^ string_of_kind inferred);
+    print_endline ("Wanted: " ^ string_of_kind k);
+    raise (Error s)
+  end
 
 let whnf_annot env typ =
   check_typ env typ BaseK "whnf_annot";
@@ -263,11 +339,12 @@ module InferPrim = Prim.MakeInfer (
     let primT t = PrimT t
     let varT i = VarT i
     let arrT t1 t2 = ArrT (t1, t2)
-    let tupT ts = TupT ts
+    let prodT ts = ProdT ts
   end
 ) 
 
 let rec infer_exp env exp =
+  let ans = 
   match exp with
   | VarE x -> lookup_val x env
   | PrimE c -> InferPrim.infer_prim c
@@ -280,7 +357,13 @@ let rec infer_exp env exp =
   | AppE (e1, e2) ->
     begin match whnf_typ (infer_exp env e1) with
     | ArrT (t2, t) -> check_exp env e2 t2 "AppE2"; t
-    | _ -> raise (Error "AppE1")
+    | t -> begin 
+        print_endline ("Checking exp: " ^ string_of_exp e1);
+        print_endline ("Got: " ^ string_of_typ t);
+        print_endline ("Wanted: ArrT(_, _)");
+        print_endline ("Applied to: " ^ string_of_exp e2);
+        raise (Error "AppE1") 
+      end
     end
   | TupE es -> ProdT (map_row (infer_exp env) es)
   | DotE (e, l) ->
@@ -331,74 +414,15 @@ let rec infer_exp env exp =
   | LetE (e1, x, e2) ->
     let t1 = infer_exp env e1 in
     infer_exp (add_val x t1 env) e2
+  in
+  check_typ env ans BaseK "sanity check";
+  ans
 
 and check_exp env exp typ s =
-  if not (equal_typ (infer_exp env exp) typ) then raise (Error s)
-
-(* String conversion *)
-
-let verbose_exp_flag = ref true
-let verbose_typ_flag = ref true
-
-let string_of_row sep string_of r =
-    String.concat ", " (List.map (fun (l, z) -> l ^ sep ^ string_of z) r)
-
-let rec string_of_kind = function
-  | BaseK -> "*"
-  | ArrK (k1, k2) -> "(" ^ string_of_kind k1 ^ "->" ^ string_of_kind k2 ^ ")"
-  | ProdK [] -> "1"
-  | ProdK ks -> "{" ^ string_of_row ":" string_of_kind ks ^ "}"
-
-let rec string_of_typ = function
-  | VarT(a) -> string_of_int a
-  | PrimT(t) -> Prim.string_of_typ t
-  | ArrT(t1, t2) -> "(" ^ string_of_typ t1 ^ " -> " ^ string_of_typ t2 ^ ")"
-  | ProdT [] -> "1"
-  | ProdT ts -> "x{" ^ string_of_row " : " string_of_typ ts ^ "}"
-  | AllT (k, t) ->
-    "(" ^ "!" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
-  | AnyT (k, t) ->
-    "(" ^ "?" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
-  | LamT(k, t) ->
-    "(" ^ "\\" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
-  | AppT (t1, t2) -> string_of_typ t1 ^ "(" ^ string_of_typ t2 ^ ")"
-  | TupT ts -> "{" ^ string_of_row " = " string_of_typ ts ^ "}"
-  | DotT(t, l) -> string_of_typ t ^ "." ^ l
-  | RecT(k, t) ->
-    "(" ^ "@" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
-
-let rec string_of_exp = function
-  | VarE x -> "var" ^ x
-  | PrimE c -> Prim.string_of_const c
-  | IfE (e1, e2, e3) ->
-    "(if " ^ string_of_exp e1 ^ " then " ^ string_of_exp e2 ^
-      " else " ^ string_of_exp e3 ^ ")"
-  | LamE (x, t, e) ->
-    "(\\" ^ x ^
-    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
-    ". " ^
-    (if !verbose_exp_flag then string_of_exp e else "_") ^
-    ")"
-  | AppE (e1, e2) -> "(" ^ string_of_exp e1 ^ " " ^ string_of_exp e2 ^ ")"
-  | TupE es -> "{" ^ string_of_row " = " string_of_exp es ^ "}"
-  | DotE (e, l) -> string_of_exp e ^ "." ^ l
-  | GenE (k, e) ->
-    "(!" ^ string_of_kind k ^ ". " ^ string_of_exp e ^ ")"
-  | InstE (e, t) -> "(" ^ string_of_exp e ^ " [" ^ string_of_typ t ^ "])"
-  | PackE (t1, e, t2) ->
-    "pack(" ^ string_of_typ t1 ^ ", " ^ string_of_exp e ^ ")" ^
-    (if !verbose_typ_flag then ":" ^ string_of_typ t2 else "")
-  | OpenE (e1, x, e2) ->
-    "(unpack(" ^ x ^ ") = " ^ string_of_exp e1 ^ " in " ^ string_of_exp e2 ^ ")"
-  | RollE (e, t) ->
-    "roll(" ^ string_of_exp e ^ ")" ^
-    (if !verbose_typ_flag then ":" ^ string_of_typ t else "")
-  | UnrollE(e) -> "unroll(" ^ string_of_exp e ^ ")"
-  | RecE(x, t, e) ->
-    "(rec " ^ x ^
-    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
-    ". " ^
-    (if !verbose_exp_flag then string_of_exp e else "_") ^
-    ")"
-  | LetE(e1, x, e2) ->
-    "(let " ^ x ^ " = " ^ string_of_exp e1 ^ " in " ^ string_of_exp e2 ^ ")"
+  let inferred = infer_exp env exp in
+  if not (equal_typ (infer_exp env exp) typ) then begin 
+    print_endline ("Checking exp: " ^ string_of_exp exp);
+    print_endline ("Got: " ^ string_of_typ inferred);
+    print_endline ("Wanted: " ^ string_of_typ typ);
+    raise (Error s)
+  end

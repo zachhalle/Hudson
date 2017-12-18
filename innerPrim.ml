@@ -112,7 +112,7 @@ module Prim = struct
     val primT : typ -> typExt
     val varT : int -> typExt
     val arrT : typExt -> typExt -> typExt
-    val tupT : (string * typExt) list -> typExt
+    val prodT : (string * typExt) list -> typExt
   end
 
   module type Infer = sig
@@ -132,10 +132,12 @@ module Prim = struct
       | _ -> primT t
 
     let lab i = "_" ^ string_of_int i
-    let row_out ts = tupT (List.mapi (fun i x -> lab (i + 1), outT x) ts)
+    let row_out ts = prodT (List.mapi (fun i x -> lab (i + 1), outT x) ts)
 
     let infer_prim c =
       match typ_of_const c with
+      | [], [t] -> outT t
+      | [], ts -> row_out ts
       | [t1], [t2] -> arrT (outT t1) (outT t2)
       | [t1], ts -> arrT (outT t1) (row_out ts)
       | ts, [t2] -> arrT (row_out ts) (outT t2)

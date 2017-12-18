@@ -118,14 +118,13 @@ let translate_prim_const c =
 let rec translate_exp env exp =
   match exp with
   | F.VarE v -> D.VarE v
-  | F.PrimE c -> 
-    begin match c with
-    | Prim.FunV (f : Prim.func) when f.name = "true" -> 
-      D.LamE ("", D.TupT [], D.PrimE (InnerPrim.Prim.BoolV true))
-    | Prim.FunV (f : Prim.func) when f.name = "false" -> 
-      D.LamE ("", D.TupT [], D.PrimE (InnerPrim.Prim.BoolV false))
+  | F.PrimE c -> begin match c with 
+    | Prim.FunV f when f.name = "true" ->
+      D.LamE ("", D.ProdT [], D.PrimE (InnerPrim.Prim.BoolV true))
+    | Prim.FunV f when f.name = "false" ->
+      D.LamE ("", D.ProdT [], D.PrimE (InnerPrim.Prim.BoolV false))
     | _ -> D.PrimE (translate_prim_const c)
-    end 
+  end
   | F.IfE (e1, e2, e3) ->
     D.IfE (translate_exp env e1, translate_exp env e2, translate_exp env e3)
   | F.LamE (v, t, e) -> D.LamE (v, translate_typ env t, translate_exp env e)

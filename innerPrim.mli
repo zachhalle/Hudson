@@ -46,7 +46,7 @@ module Prim : sig
     val primT : typ -> typExt
     val varT : int -> typExt
     val arrT : typExt -> typExt -> typExt
-    val tupT : (string * typExt) list -> typExt
+    val prodT : (string * typExt) list -> typExt
   end
 
   module type Infer = sig
