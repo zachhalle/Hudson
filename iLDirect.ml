@@ -292,6 +292,7 @@ let rec equal_typ' t1 t2 =
   | _ -> false
 
 let equal_typ t1 t2 = equal_typ' (norm_typ t1) (norm_typ t2)
+
 let equal_typ_exn t1 t2 = 
   if not (equal_typ t1 t2) then raise (Error "equal_typ")
 
