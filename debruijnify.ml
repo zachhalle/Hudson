@@ -147,10 +147,10 @@ let translate_prim_fun (f : Prim.func) =
   | "Char.fromInt" -> InnerPrim.Prim.CharFromInt
   | "Char.print" -> InnerPrim.Prim.CharPrint
   | "Text.++" -> InnerPrim.Prim.TextConcat
-  | "Text.<" -> InnerPrim.Prim.LT
-  | "Text.>" -> InnerPrim.Prim.GT
-  | "Text.<=" -> InnerPrim.Prim.LTE
-  | "Text.>=" -> InnerPrim.Prim.GTE
+  | "Text.<" -> InnerPrim.Prim.TextLT
+  | "Text.>" -> InnerPrim.Prim.TextGT
+  | "Text.<=" -> InnerPrim.Prim.TextLTE
+  | "Text.>=" -> InnerPrim.Prim.TextGTE
   | "Text.length" -> InnerPrim.Prim.TextLength
   | "Text.sub" -> InnerPrim.Prim.TextSub
   | "Text.fromChar" -> InnerPrim.Prim.TextFromChar
