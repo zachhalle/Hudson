@@ -275,23 +275,8 @@ let rec whnf_typ typ =
 let equal_row equal r1 r2 =
   List.for_all2 (fun (l1, z1) (l2, z2) -> l1 = l2 && equal z1 z2) r1 r2
 
-(* TODO: A better implementation would weak-head reduce and compare *)
-let rec equal_typ' t1 t2 =
-  match t1, t2 with
-  | VarT a1, VarT a2 -> a1 = a2
-  | PrimT t1, PrimT t2 -> t1 = t2
-  | ArrT (t11, t12), ArrT (t21, t22) -> equal_typ' t11 t21 && equal_typ' t12 t22
-  | ProdT ts1, ProdT ts2 -> equal_row equal_typ' ts1 ts2
-  | AllT (k1, t1), AllT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
-  | AnyT (k1, t1), AnyT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
-  | LamT (k1, t1), LamT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
-  | AppT (t11, t12), AppT (t21, t22) -> equal_typ' t11 t21 && equal_typ' t12 t22
-  | TupT ts1, TupT ts2 -> equal_row equal_typ' ts1 ts2
-  | DotT (t1, l1), DotT (t2, l2) -> equal_typ' t1 t2 && l1 = l2
-  | RecT (k1, t1), RecT (k2, t2) -> k1 = k2 && equal_typ' t1 t2
-  | _ -> false
-
-let equal_typ t1 t2 = equal_typ' (norm_typ t1) (norm_typ t2)
+(* TODO: A better implementation would use weak-head reduction *)
+let equal_typ t1 t2 = norm_typ t1 = norm_typ t2
 
 let equal_typ_exn t1 t2 = 
   if not (equal_typ t1 t2) then raise (Error "equal_typ")
@@ -323,12 +308,8 @@ let rec infer_typ env typ =
 
 and check_typ env t k s = 
   let inferred = infer_typ env t in
-  if inferred <> k then begin 
-    print_endline ("Checking typ: " ^ string_of_typ t);
-    print_endline ("Got: " ^ string_of_kind inferred);
-    print_endline ("Wanted: " ^ string_of_kind k);
+  if inferred <> k then
     raise (Error s)
-  end
 
 let whnf_annot env typ =
   check_typ env typ BaseK "whnf_annot";
@@ -345,7 +326,6 @@ module InferPrim = Prim.MakeInfer (
 ) 
 
 let rec infer_exp env exp =
-  let ans = 
   match exp with
   | VarE x -> lookup_val x env
   | PrimE c -> InferPrim.infer_prim c
@@ -358,13 +338,7 @@ let rec infer_exp env exp =
   | AppE (e1, e2) ->
     begin match whnf_typ (infer_exp env e1) with
     | ArrT (t2, t) -> check_exp env e2 t2 "AppE2"; t
-    | t -> begin 
-        print_endline ("Checking exp: " ^ string_of_exp e1);
-        print_endline ("Got: " ^ string_of_typ t);
-        print_endline ("Wanted: ArrT(_, _)");
-        print_endline ("Applied to: " ^ string_of_exp e2);
-        raise (Error "AppE1") 
-      end
+    | t -> raise (Error "AppE1") 
     end
   | TupE es -> ProdT (map_row (infer_exp env) es)
   | DotE (e, l) ->
@@ -415,15 +389,8 @@ let rec infer_exp env exp =
   | LetE (e1, x, e2) ->
     let t1 = infer_exp env e1 in
     infer_exp (add_val x t1 env) e2
-  in
-  check_typ env ans BaseK "sanity check";
-  ans
 
 and check_exp env exp typ s =
   let inferred = infer_exp env exp in
-  if not (equal_typ (infer_exp env exp) typ) then begin 
-    print_endline ("Checking exp: " ^ string_of_exp exp);
-    print_endline ("Got: " ^ string_of_typ inferred);
-    print_endline ("Wanted: " ^ string_of_typ typ);
+  if not (equal_typ (infer_exp env exp) typ) then
     raise (Error s)
-  end
