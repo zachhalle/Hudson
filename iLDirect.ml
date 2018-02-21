@@ -275,8 +275,20 @@ let rec whnf_typ typ =
 let equal_row equal r1 r2 =
   List.for_all2 (fun (l1, z1) (l2, z2) -> l1 = l2 && equal z1 z2) r1 r2
 
-(* TODO: A better implementation would use weak-head reduction *)
-let equal_typ t1 t2 = norm_typ t1 = norm_typ t2
+let rec equal_typ t1 t2 =
+  match whnf_typ t1, whnf_typ t2 with
+  | VarT i, VarT j -> i = j
+  | PrimT t1, PrimT t2 -> t1 = t2
+  | ArrT (t11, t12), ArrT (t21, t22) -> equal_typ t11 t21 && equal_typ t12 t22
+  | ProdT tr1, ProdT tr2 -> equal_row equal_typ tr1 tr2
+  | AllT (k1, t1), AllT (k2, t2) -> k1 = k2 && equal_typ t1 t2
+  | AnyT (k1, t1), AnyT (k2, t2) -> k1 = k2 && equal_typ t1 t2
+  | AppT (t11, t12), AppT (t21, t22) -> equal_typ t11 t21 && equal_typ t12 t22
+  | LamT (k1, t1), LamT (k2, t2) -> k1 = k2 && equal_typ t1 t2
+  | TupT tr1, TupT tr2 -> equal_row equal_typ tr1 tr2
+  | DotT (t1, l1), DotT (t2, l2) -> l1 = l2 && equal_typ t1 t2
+  | RecT (k1, t1), RecT (k2, t2) -> k1 = k2 && equal_typ t1 t2
+  | _ -> false
 
 let equal_typ_exn t1 t2 = 
   if not (equal_typ t1 t2) then raise (Error "equal_typ")

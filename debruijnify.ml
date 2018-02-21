@@ -112,16 +112,6 @@ let translate_prim_fun (f : Prim.func) =
   | "Text.print" -> InnerPrim.Prim.TextPrint
   | s -> raise (Error ("Undefined primitive constant: " ^ s))
 
-module InferPrim = InnerPrim.Prim.MakeInfer (
-  struct 
-    type typExt = D.typ
-    let primT t = D.PrimT t
-    let varT i = D.VarT i
-    let arrT t1 t2 = D.ArrT (t1, t2)
-    let prodT ts = D.ProdT ts
-  end
-)
-
 let translate_prim_const c =
   match c with
   | Prim.BoolV b -> InnerPrim.Prim.BoolV b
