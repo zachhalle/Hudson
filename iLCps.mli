@@ -29,7 +29,6 @@ type exp =
   | AppE of value * value
   | DotE of var * value * lab * exp
   | OpenE of value * var * exp (* binds *)
-  | RecE of var * typ * exp
   | LetE of value * var * exp
 
 and value =
@@ -39,6 +38,7 @@ and value =
   | PackV of typ * value * typ
   | RollV of value * typ
   | UnrollV of value
+  | RecV of var * typ * value
 
 exception Error of string
 
@@ -49,3 +49,29 @@ val lift_exp : int -> exp -> exp
 
 val subst_typ : typ -> typ -> typ
 val subst_exp : typ -> exp -> exp
+
+(* Environments *)
+
+type env
+
+val empty : env
+val add_typ : kind -> env -> env
+val add_val : var -> typ -> env -> env
+
+val lookup_typ : int -> env -> kind (* raise Error *)
+val lookup_val : var -> env -> typ (* raise Error *)
+
+(* Normalisation and Equality *)
+
+val norm_typ : typ -> typ (* raise Error *) (* absolute normalization *)
+val whnf_typ : typ -> typ
+val equal_typ : typ -> typ -> bool (* raise Error *)
+
+(* Checking *)
+
+val infer_typ : env -> typ -> kind (* raise Error *)
+val infer_val : env -> value -> typ (* raise Error *)
+
+val check_typ : env -> typ -> kind -> string -> unit (* raise Error *)
+val check_exp : env -> exp -> typ -> string -> unit (* raise Error *)
+val check_val : env -> value -> typ -> string -> unit (* raise Error *)

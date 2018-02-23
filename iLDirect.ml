@@ -298,6 +298,7 @@ let equal_typ_exn t1 t2 =
 let rec infer_typ env typ =
   match typ with
   | VarT v -> lookup_typ v env
+  | PrimT (Prim.VarT i) -> check_typ env (VarT i) BaseK "PrimT"; BaseK 
   | PrimT t -> BaseK
   | ArrT (t1, t2) ->
     check_typ env t1 BaseK "ArrT1"; check_typ env t2 BaseK "ArrT2"; BaseK
