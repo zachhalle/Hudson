@@ -7,7 +7,7 @@ MODULES = \
   lib source prim syntax parser lexer \
   fomega types iL env erase trace sub elab \
   lambda compile innerPrim iLDirect debruijnify \
-  iLCps test main
+  iLCps cpsConvert test main
 NOMLI = syntax iL main
 PARSERS = parser
 LEXERS = lexer

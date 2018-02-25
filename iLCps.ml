@@ -26,12 +26,12 @@ type typ = (* de Bruijn representation *)
   | RecT of kind * typ (* binds *)
 
 type exp =
-  | PrimE of var * InnerPrim.Prim.const * value list * exp
   | IfE of value * exp * exp
   | AppE of value * value
-  | DotE of var * value * lab * exp
+  | DotE of value * lab * var * exp
   | OpenE of value * var * exp (* binds *)
   | LetE of value * var * exp
+  | PrimE of Prim.const * value list * var * exp
 
 and value =
   | VarV of var
@@ -43,7 +43,6 @@ and value =
   | RecV of var * typ * value
 
 exception Error of string
-exception Unimplemented
 
 (* Helpers *)
 
@@ -53,6 +52,75 @@ let map_row f r = List.map (fun (l, v) -> l, f v) r
 let iter_row f r = List.iter (fun (l, v) -> f v) r
 let lookup_lab l row =
   try List.assoc l row with Not_found -> raise (Error ("label " ^ l))
+
+(* String conversion *)
+
+let verbose_exp_flag = ref true
+let verbose_typ_flag = ref true
+
+let string_of_row sep string_of r =
+    String.concat ", " (List.map (fun (l, z) -> l ^ sep ^ string_of z) r)
+
+let rec string_of_kind = function
+  | BaseK -> "*"
+  | ArrK (k1, k2) -> "(" ^ string_of_kind k1 ^ "->" ^ string_of_kind k2 ^ ")"
+  | ProdK [] -> "1"
+  | ProdK ks -> "{" ^ string_of_row ":" string_of_kind ks ^ "}"
+
+let rec string_of_typ = function
+  | VarT(a) -> "(tvar " ^ string_of_int a ^ ")"
+  | PrimT(t) -> Prim.string_of_typ t
+  | NotT t -> "not (" ^ string_of_typ t ^ ")"
+  | ProdT [] -> "1"
+  | ProdT ts -> "x{" ^ string_of_row " : " string_of_typ ts ^ "}"
+  | AnyT (k, t) ->
+    "(" ^ "?" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+  | LamT(k, t) ->
+    "(" ^ "\\" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+  | AppT (t1, t2) -> string_of_typ t1 ^ "(" ^ string_of_typ t2 ^ ")"
+  | TupT ts -> "{" ^ string_of_row " = " string_of_typ ts ^ "}"
+  | DotT(t, l) -> string_of_typ t ^ "." ^ l
+  | RecT(k, t) ->
+    "(" ^ "@" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
+
+let rec string_of_exp = function
+  | IfE (v, e1, e2) ->
+    "(if " ^ string_of_val v ^ " then " ^ string_of_exp e1 ^
+      " else " ^ string_of_exp e2 ^ ")"
+  | AppE (v1, v2) -> "(" ^ string_of_val v1 ^ " " ^ string_of_val v2 ^ ")"
+  | DotE (v, l, x, e) ->
+    "(proj " ^ x ^ " = " ^ string_of_val v ^ "." ^ l ^ " in " 
+      ^ string_of_exp e ^ ")"
+  | OpenE (v, x, e) ->
+    "(unpack(" ^ x ^ ") = " ^ string_of_val v ^ " in " ^ string_of_exp e ^ ")"
+  | LetE (v, x, e) ->
+    "(let " ^ x ^ " = " ^ string_of_val v ^ " in " ^ string_of_exp e ^ ")"
+  | PrimE (c, vs, x, e) -> 
+    "(prim " ^ x ^ " = " ^ Prim.string_of_const c ^ "["
+      ^ (String.concat ", " (List.map string_of_val vs))
+      ^ "] in " ^ string_of_exp e ^ ")"
+and string_of_val =function
+  | VarV x -> "(var" ^ x ^ ")"
+  | LamV (x, t, e) ->
+    "(\\" ^ x ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
+    ". " ^
+    (if !verbose_exp_flag then string_of_exp e else "_") ^
+    ")"
+  | TupV vs -> "{" ^ string_of_row " = " string_of_val vs ^ "}"
+  | PackV (t1, v, t2) ->
+    "pack(" ^ string_of_typ t1 ^ ", " ^ string_of_val v ^ ")" ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t2 else "")
+  | RollV (v, t) ->
+    "roll(" ^ string_of_val v ^ ")" ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "")
+  | UnrollV (v) -> "unroll(" ^ string_of_val v ^ ")"
+  | RecV (x, t, v) ->
+    "(rec " ^ x ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
+    ". " ^
+    (if !verbose_exp_flag then string_of_val v else "_") ^
+    ")"
 
 (* Substitutions *)
 
@@ -92,18 +160,18 @@ let rec subst_typ_main m s n l t =
 
 let rec subst_exp_main m s n l e =
   match e with
-  | PrimE (x, p, vs, e) ->
-    PrimE (x, p, List.map (subst_val_main m s n l) vs, subst_exp_main m s n l e)
   | IfE (v, e1, e2) ->
     IfE (subst_val_main m s n l v, subst_exp_main m s n l e1, subst_exp_main m s n l e2)
   | AppE (v1, v2) ->
     AppE (subst_val_main m s n l v1, subst_val_main m s n l v2)
-  | DotE (x, v, l', e) ->
-    DotE (x, subst_val_main m s n l v, l', subst_exp_main m s n l e)
+  | DotE (v, l', x, e) ->
+    DotE (subst_val_main m s n l v, l', x, subst_exp_main m s n l e)
   | OpenE (v, x, e) ->
     OpenE (subst_val_main m s n l v, x, subst_exp_main (m + 1) s n l e)
   | LetE (v, x, e) ->
     LetE (subst_val_main m s n l v, x, subst_exp_main m s n l e)
+  | PrimE (c, vs, x, e) ->
+    PrimE (c, List.map (subst_val_main m s n l) vs, x, subst_exp_main m s n l e)
 
 and subst_val_main m s n l v =
   match v with
@@ -243,18 +311,82 @@ and check_typ env typ kind s =
   if infer_typ env typ <> kind then
     raise (Error s)
 
-let rec infer_val env value = raise Unimplemented
+let prim_row ts = ProdT (List.mapi (fun i t -> lab i, PrimT t) ts)
+
+let rec infer_val env value =
+  match value with
+  | VarV x -> lookup_val x env
+  | LamV (x, t, e) -> check_exp (add_val x t env) e "LamV1"; NotT t
+  | TupV vr -> ProdT (map_row (infer_val env) vr)
+  | PackV (t, v, t') ->
+    check_typ env t' BaseK "PackV1";
+    begin match whnf_typ t' with
+    | AnyT (k, t'') ->
+      check_typ env t k "PackV3";
+      check_val env v (subst_typ t t') "PackV4";
+      t'
+    | _ -> raise (Error "PackV2")
+    end
+  | RollV (v, t) ->
+    begin match whnf_typ t with
+    | RecT (k, t') ->
+      check_typ env t k "RollV2";
+      check_val env v (subst_typ t' t) "RollV3";
+      t
+    | _ -> raise (Error "RollV1")
+    end
+  | UnrollV v ->
+    begin match whnf_typ (infer_val env v) with
+    | RecT (k, t') as t -> check_typ env t k "RecT"; subst_typ t t'
+    | _ -> raise (Error "UnrollV1")
+    end
+  | RecV (x, t, v) -> check_val (add_val x t env) v t "RecV1"; t
+
 and check_val env value typ s =
   if not (equal_typ (infer_val env value) typ) then
     raise (Error s)
 
-and check_exp env value typ s = raise Unimplemented
-
-(* String conversion *)
-
-let verbose_exp_flag = ref true
-let verbose_typ_flag = ref true
-
-let string_of_kind = raise Unimplemented
-let string_of_typ = raise Unimplemented
-let string_of_exp = raise Unimplemented
+and check_exp env exp s =
+  match exp with
+  | IfE (v, e1, e2) ->
+    check_val env v (PrimT Prim.BoolT) "IfE1";
+    check_exp env e1 "IfE2"; 
+    check_exp env e2 "IfE3"
+  | AppE (v1, v2) ->
+    begin match whnf_typ (infer_val env v1) with
+    | NotT t -> check_val env v2 t "AppE2"
+    | _ -> raise (Error "AppE1")
+    end
+  | DotE (v, l, x, e) ->
+    begin match whnf_typ (infer_val env v) with
+    | ProdT tr -> check_exp (add_val x (lookup_lab l tr) env) e "DotE2"
+    | _ -> raise (Error "DotE1")
+    end
+  | OpenE (v, x, e) ->
+    begin match whnf_typ (infer_val env v) with
+    | AnyT (k, t) -> check_exp (add_val x t (add_typ k env)) e "OpenE2"
+    | _ -> raise (Error "OpenE1")
+    end
+  | LetE (v, x, e) -> check_exp (add_val x (infer_val env v) env) e "LetE1"
+  | PrimE (c, vs, x, e) ->
+    match Prim.typ_of_const c with
+    | [t1], [t2] ->
+      begin match vs with
+      | [v] -> 
+        check_val env v (PrimT t1) "PrimE1";
+        check_exp (add_val x (PrimT t2) env) e "PrimE2"
+      | _ -> raise (Error "PrimE3")
+      end
+    | [t], ts ->
+      begin match vs with
+      | [v] -> 
+        check_val env v (PrimT t) "PrimE4";
+        check_exp (add_val x (prim_row ts) env) e "PrimE5"
+      | _ -> raise (Error "PrimE6")
+      end
+    | ts, [t] ->
+      check_val env (TupV (tup_row vs)) (prim_row ts) "PrimE7";
+      check_exp (add_val x (PrimT t) env) e "PrimE8"
+    | ts1, ts2 ->
+      check_val env (TupV (tup_row vs)) (prim_row ts1) "PrimE9";
+      check_exp (add_val x (prim_row ts2) env) e "PrimE10"

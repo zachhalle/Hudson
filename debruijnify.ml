@@ -156,10 +156,12 @@ let translate exp =
   if !type_check then begin
     print_endline "debruijnify: checking f";
     let typ = F.infer_exp F.empty exp in
-    print_endline "debruijnify: translate";
+    print_endline "debruijnify: translate exp";
     let exp' = translate_exp empty exp in
+    print_endline "debruijnify: translate typ";
+    let typ' = translate_typ empty typ in
     print_endline "debruijnify: check direct";
-    let () = D.check_exp D.empty exp' (translate_typ empty typ) "debruijnify" in
+    let () = D.check_exp D.empty exp' typ' "debruijnify" in
     print_endline "debruijnify: finished";
     exp'
   end else

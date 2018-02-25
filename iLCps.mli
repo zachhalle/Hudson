@@ -24,12 +24,12 @@ type typ = (* de Bruijn representation *)
   | RecT of kind * typ (* binds *)
 
 type exp =
-  | PrimE of var * InnerPrim.Prim.const * value list * exp
   | IfE of value * exp * exp
   | AppE of value * value
-  | DotE of var * value * lab * exp
+  | DotE of value * lab * var * exp
   | OpenE of value * var * exp (* binds *)
   | LetE of value * var * exp
+  | PrimE of InnerPrim.Prim.const * value list * var * exp
 
 and value =
   | VarV of var
@@ -46,9 +46,11 @@ exception Error of string
 
 val lift_typ : int -> typ -> typ
 val lift_exp : int -> exp -> exp
+val lift_val : int -> value -> value
 
 val subst_typ : typ -> typ -> typ
 val subst_exp : typ -> exp -> exp
+val subst_val : typ -> value -> value
 
 (* Environments *)
 
@@ -73,5 +75,15 @@ val infer_typ : env -> typ -> kind (* raise Error *)
 val infer_val : env -> value -> typ (* raise Error *)
 
 val check_typ : env -> typ -> kind -> string -> unit (* raise Error *)
-val check_exp : env -> exp -> typ -> string -> unit (* raise Error *)
+val check_exp : env -> exp -> string -> unit (* raise Error *)
 val check_val : env -> value -> typ -> string -> unit (* raise Error *)
+
+(* String conversions *)
+
+val verbose_exp_flag : bool ref
+val verbose_typ_flag : bool ref
+
+val string_of_kind : kind -> string
+val string_of_typ : typ -> string
+val string_of_exp : exp -> string
+val string_of_val : value -> string
