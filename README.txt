@@ -1,4 +1,6 @@
-This is a WIP compiler for Rossberg's 1ML, based on the sources for the interpreter found at (https://github.com/rossberg/1ml). The original README is reproduced below.
+This is a WIP compiler for Rossberg's 1ML, based on the sources for the interpreter found at (https://github.com/rossberg/1ml).
+
+The original README is reproduced below.
 
 1ML TOY INTERPRETER
 
