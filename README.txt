@@ -1,4 +1,8 @@
-This is a WIP compiler for Rossberg's 1ML, based on the sources for the interpreter found at (https://github.com/rossberg/1ml).
+This is a WIP compiler for Rossberg's 1ML, based on the sources for the interpreter found at (https://github.com/rossberg/1ml). See (https://people.mpi-sws.org/~rossberg/).
+
+My additions are based on the material taught in, and starter code provided by,
+Karl Crary's "Higher Order Type Compilation" class at Carnegie Mellon University.
+See (http://www.cs.cmu.edu/~crary/).
 
 The original README is reproduced below.
 
