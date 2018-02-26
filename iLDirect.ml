@@ -44,8 +44,6 @@ type exp =
   | LetE of exp * var * exp
 
 exception Error of string
-exception TypeCheck of exp * typ * typ
-exception Unimplemented
 
 (* Helpers *)
 
@@ -233,8 +231,6 @@ let lookup_val v { ksize ; kenv ; tenv } =
 
 (* Normalisation and Equality *)
 
-let varT x = raise Unimplemented
-
 let rec norm_typ t =
   match t with
   | VarT _ -> t
@@ -319,14 +315,7 @@ let rec infer_typ env typ =
     end
   | RecT (k, t) -> check_typ (add_typ k env) t k "RecT"; k
 
-and check_typ env t k s = 
-  let inferred = infer_typ env t in
-  if inferred <> k then
-    raise (Error s)
-
-let whnf_annot env typ =
-  check_typ env typ BaseK "whnf_annot";
-  whnf_typ typ
+and check_typ env t k s = if infer_typ env t <> k then raise (Error s)
 
 module InferPrim = Prim.MakeInfer (
   struct 
@@ -382,7 +371,7 @@ let rec infer_exp env exp =
       check_typ env t2' BaseK "OpenE2"; t2'
     | _ -> raise (Error "OpenE")
     end
-  | RollE (e, t) -> (* TODO: why does fomega use "unroll_typ" *)
+  | RollE (e, t) ->
     begin match whnf_typ t with
     | RecT (k, t') -> 
       check_typ env t k "RecT";
@@ -390,7 +379,7 @@ let rec infer_exp env exp =
       t
     | _ -> raise (Error "RollE")
     end
-  | UnrollE e -> (* TODO: why does fomega use "unroll_typ" *)
+  | UnrollE e ->
     begin match whnf_typ (infer_exp env e) with
     | RecT (k, t') as t -> check_typ env t k "RecT"; subst_typ t t'
     | _ -> raise (Error "UnrollE")
@@ -404,6 +393,4 @@ let rec infer_exp env exp =
     infer_exp (add_val x t1 env) e2
 
 and check_exp env exp typ s =
-  let inferred = infer_exp env exp in
-  if not (equal_typ (infer_exp env exp) typ) then
-    raise (Error s)
+  if not (equal_typ (infer_exp env exp) typ) then raise (Error s)
