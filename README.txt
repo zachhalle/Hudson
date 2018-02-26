@@ -1,3 +1,5 @@
+This is a WIP compiler for Rossberg's 1ML, based on the sources for the interpreter found at (https://github.com/rossberg/1ml).
+
 1ML TOY INTERPRETER
 
 (c) 2014 Andreas Rossberg <rossberg@mpi-sws.org>
