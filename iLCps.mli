@@ -24,12 +24,13 @@ type typ = (* de Bruijn representation *)
   | RecT of kind * typ (* binds *)
 
 type exp =
+  | HaltE
   | IfE of value * exp * exp
   | AppE of value * value
   | DotE of value * lab * var * exp
   | OpenE of value * var * exp (* binds *)
   | LetE of value * var * exp
-  | PrimE of InnerPrim.Prim.const * value list * var * exp
+  | RecE of var * typ * exp
 
 and value =
   | VarV of var
@@ -38,7 +39,7 @@ and value =
   | PackV of typ * value * typ
   | RollV of value * typ
   | UnrollV of value
-  | RecV of var * typ * value
+  | PrimV of InnerPrim.Prim.const
 
 exception Error of string
 
@@ -56,9 +57,10 @@ val subst_val : typ -> value -> value
 
 type env
 
-val empty : env
+val empty : unit -> env
 val add_typ : kind -> env -> env
 val add_val : var -> typ -> env -> env
+val new_var : env -> var
 
 val lookup_typ : int -> env -> kind (* raise Error *)
 val lookup_val : var -> env -> typ (* raise Error *)
@@ -68,9 +70,11 @@ val lookup_val : var -> env -> typ (* raise Error *)
 val norm_typ : typ -> typ (* raise Error *) (* absolute normalization *)
 val whnf_typ : typ -> typ
 val equal_typ : typ -> typ -> bool (* raise Error *)
+val equal_typ_exn : typ -> typ -> unit (* raise Error *)
 
 (* Checking *)
 
+val typ_of_prim : InnerPrim.Prim.const -> typ
 val infer_typ : env -> typ -> kind (* raise Error *)
 val infer_val : env -> value -> typ (* raise Error *)
 

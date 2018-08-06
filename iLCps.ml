@@ -26,12 +26,13 @@ type typ = (* de Bruijn representation *)
   | RecT of kind * typ (* binds *)
 
 type exp =
+  | HaltE
   | IfE of value * exp * exp
   | AppE of value * value
   | DotE of value * lab * var * exp
   | OpenE of value * var * exp (* binds *)
   | LetE of value * var * exp
-  | PrimE of Prim.const * value list * var * exp
+  | RecE of var * typ * exp
 
 and value =
   | VarV of var
@@ -40,7 +41,7 @@ and value =
   | PackV of typ * value * typ
   | RollV of value * typ
   | UnrollV of value
-  | RecV of var * typ * value
+  | PrimV of Prim.const
 
 exception Error of string
 
@@ -84,6 +85,7 @@ let rec string_of_typ = function
     "(" ^ "@" ^ string_of_kind k ^ ". " ^ string_of_typ t ^ ")"
 
 let rec string_of_exp = function
+  | HaltE -> "halt"
   | IfE (v, e1, e2) ->
     "(if " ^ string_of_val v ^ " then " ^ string_of_exp e1 ^
       " else " ^ string_of_exp e2 ^ ")"
@@ -95,11 +97,13 @@ let rec string_of_exp = function
     "(unpack(" ^ x ^ ") = " ^ string_of_val v ^ " in " ^ string_of_exp e ^ ")"
   | LetE (v, x, e) ->
     "(let " ^ x ^ " = " ^ string_of_val v ^ " in " ^ string_of_exp e ^ ")"
-  | PrimE (c, vs, x, e) -> 
-    "(prim " ^ x ^ " = " ^ Prim.string_of_const c ^ "["
-      ^ (String.concat ", " (List.map string_of_val vs))
-      ^ "] in " ^ string_of_exp e ^ ")"
-and string_of_val =function
+  | RecE (x, t, e) ->
+    "(rec " ^ x ^
+    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
+    ". " ^
+    (if !verbose_exp_flag then string_of_exp e else "_") ^
+    ")"
+and string_of_val = function
   | VarV x -> "(var" ^ x ^ ")"
   | LamV (x, t, e) ->
     "(\\" ^ x ^
@@ -115,12 +119,7 @@ and string_of_val =function
     "roll(" ^ string_of_val v ^ ")" ^
     (if !verbose_typ_flag then ":" ^ string_of_typ t else "")
   | UnrollV (v) -> "unroll(" ^ string_of_val v ^ ")"
-  | RecV (x, t, v) ->
-    "(rec " ^ x ^
-    (if !verbose_typ_flag then ":" ^ string_of_typ t else "") ^
-    ". " ^
-    (if !verbose_exp_flag then string_of_val v else "_") ^
-    ")"
+  | PrimV prim -> "(prim " ^ Prim.string_of_const prim ^ ")"
 
 (* Substitutions *)
 
@@ -160,6 +159,7 @@ let rec subst_typ_main m s n l t =
 
 let rec subst_exp_main m s n l e =
   match e with
+  | HaltE -> e
   | IfE (v, e1, e2) ->
     IfE (subst_val_main m s n l v, subst_exp_main m s n l e1, subst_exp_main m s n l e2)
   | AppE (v1, v2) ->
@@ -170,8 +170,8 @@ let rec subst_exp_main m s n l e =
     OpenE (subst_val_main m s n l v, x, subst_exp_main (m + 1) s n l e)
   | LetE (v, x, e) ->
     LetE (subst_val_main m s n l v, x, subst_exp_main m s n l e)
-  | PrimE (c, vs, x, e) ->
-    PrimE (c, List.map (subst_val_main m s n l) vs, x, subst_exp_main m s n l e)
+  | RecE (x, t, e) ->
+    RecE (x, subst_typ_main m s n l t, subst_exp_main m s n l e)
 
 and subst_val_main m s n l v =
   match v with
@@ -186,8 +186,7 @@ and subst_val_main m s n l v =
     RollV (subst_val_main m s n l v, subst_typ_main m s n l t)
   | UnrollV v -> 
     UnrollV (subst_val_main m s n l v)
-  | RecV (x, t, v) ->
-    RecV (x, subst_typ_main m s n l t, subst_val_main m s n l v)
+  | PrimV c -> PrimV c
 
 let lift_typ l t = if l = 0 then t else subst_typ_main 0 [] 0 l t
 let lift_exp l e = if l = 0 then e else subst_exp_main 0 [] 0 l e
@@ -202,32 +201,47 @@ let subst_val s v = subst_val_main 0 [s] 1 0 v
 module VarMap = Map.Make(String)
 
 type env =
-  { ksize : int ;
+  { counter : int ref ;
+    ksize : int ;
     kenv : kind list ;
     tenv : (int * typ) VarMap.t }
 
-let empty = { ksize = 0 ; kenv = [] ; tenv = VarMap.empty }
+let empty () = 
+  { counter = ref 0 ; ksize = 0 ; kenv = [] ; tenv = VarMap.empty }
 
-let add_typ k { ksize ; kenv ; tenv } =
-  { ksize = ksize + 1 ;
+let add_typ k { counter ; ksize ; kenv ; tenv } =
+  { counter = counter ;
+    ksize = ksize + 1 ;
     kenv = k :: kenv ;
     tenv = tenv }
 
-let add_val v t { ksize ; kenv ; tenv } =
-  { ksize = ksize ;
+let add_val v t { counter ; ksize ; kenv ; tenv } =
+  { counter = counter ;
+    ksize = ksize ;
     kenv = kenv ;
     tenv = VarMap.add v (ksize, t) tenv }
 
-let lookup_typ i { ksize ; kenv ; tenv } =
+let lookup_typ i { counter ; ksize ; kenv ; tenv } =
   try List.nth kenv i with
   | Failure _ -> raise (Error "Undefined type variable")
 
-let lookup_val v { ksize ; kenv ; tenv } =
+let lookup_val v { counter ; ksize ; kenv ; tenv } =
   let n, c = 
     try VarMap.find v tenv with
     | Not_found -> raise (Error "Undefined variable")
   in
   lift_typ (ksize - n) c
+
+let new_var { counter ; ksize ; kenv ; tenv } =
+  let rec loop () =
+    let v = "v" ^ string_of_int (!counter) in
+    if VarMap.mem v tenv then begin 
+      counter := !counter + 1;
+      loop ()
+    end else
+      v
+  in
+  loop ()
 
 (* Normalisation and Equality *)
 
@@ -283,7 +297,20 @@ let rec equal_typ t1 t2 =
   | RecT (k1, t1), RecT (k2, t2) -> k1 = k2 && equal_typ t1 t2
   | _ -> false
 
+let equal_typ_exn t1 t2 = if not (equal_typ t1 t2) then raise (Error "equal_typ_exn")
+
 (* Checking *)
+module InferPrim = Prim.MakeInfer (
+  struct 
+    type typExt = typ
+    let primT t = PrimT t
+    let varT i = VarT i
+    let arrT t1 t2 = NotT (ProdT (tup_row [t1; NotT t2]))
+    let prodT ts = ProdT ts
+  end
+)
+
+let typ_of_prim = InferPrim.infer_prim
 
 let rec infer_typ env typ =
   match typ with
@@ -340,7 +367,7 @@ let rec infer_val env value =
     | RecT (k, t') as t -> check_typ env t k "RecT"; subst_typ t t'
     | _ -> raise (Error "UnrollV1")
     end
-  | RecV (x, t, v) -> check_val (add_val x t env) v t "RecV1"; t
+  | PrimV prim -> typ_of_prim prim
 
 and check_val env value typ s =
   if not (equal_typ (infer_val env value) typ) then
@@ -348,6 +375,7 @@ and check_val env value typ s =
 
 and check_exp env exp s =
   match exp with
+  | HaltE -> ()
   | IfE (v, e1, e2) ->
     check_val env v (PrimT Prim.BoolT) "IfE1";
     check_exp env e1 "IfE2"; 
@@ -368,25 +396,4 @@ and check_exp env exp s =
     | _ -> raise (Error "OpenE1")
     end
   | LetE (v, x, e) -> check_exp (add_val x (infer_val env v) env) e "LetE1"
-  | PrimE (c, vs, x, e) ->
-    match Prim.typ_of_const c with
-    | [t1], [t2] ->
-      begin match vs with
-      | [v] -> 
-        check_val env v (PrimT t1) "PrimE1";
-        check_exp (add_val x (PrimT t2) env) e "PrimE2"
-      | _ -> raise (Error "PrimE3")
-      end
-    | [t], ts ->
-      begin match vs with
-      | [v] -> 
-        check_val env v (PrimT t) "PrimE4";
-        check_exp (add_val x (prim_row ts) env) e "PrimE5"
-      | _ -> raise (Error "PrimE6")
-      end
-    | ts, [t] ->
-      check_val env (TupV (tup_row vs)) (prim_row ts) "PrimE7";
-      check_exp (add_val x (PrimT t) env) e "PrimE8"
-    | ts1, ts2 ->
-      check_val env (TupV (tup_row vs)) (prim_row ts1) "PrimE9";
-      check_exp (add_val x (prim_row ts2) env) e "PrimE10"
+  | RecE (x, t, e) -> check_exp (add_val x t env) e "RecE"
