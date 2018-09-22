@@ -394,3 +394,21 @@ let rec infer_exp env exp =
 
 and check_exp env exp typ s =
   if not (equal_typ (infer_exp env exp) typ) then raise (Error s)
+
+let exp_node_name e =
+  match e with
+  | VarE _ -> "var"
+  | PrimE _ -> "prim"
+  | IfE _ -> "if"
+  | LamE _ -> "lam"
+  | AppE _ -> "app"
+  | TupE _ -> "tup"
+  | DotE _ -> "dot"
+  | GenE _ -> "gen"
+  | InstE _ -> "inst"
+  | PackE _ -> "pack"
+  | OpenE _ -> "open"
+  | RollE _ -> "roll"
+  | UnrollE _ -> "unroll"
+  | RecE _ -> "rec"
+  | LetE _ -> "let"

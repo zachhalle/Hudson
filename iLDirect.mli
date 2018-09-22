@@ -84,3 +84,5 @@ val verbose_typ_flag : bool ref
 val string_of_kind : kind -> string
 val string_of_typ : typ -> string
 val string_of_exp : exp -> string
+
+val exp_node_name : exp -> string

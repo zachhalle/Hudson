@@ -66,7 +66,8 @@ let process file source =
         (Erase.erase_env !env) fprog (Erase.erase_extyp sign) "Prog"
     end;
     Debruijnify.type_check := true;
-    let _ = Debruijnify.translate fprog in
+    CpsConvert.type_check := true;
+    let _ = CpsConvert.translate (Debruijnify.translate fprog) in
     let Types.ExT(aks, typ) = sign in
     let typrow = match typ with Types.StrT(row) -> row | _ -> [] in
     if !no_run_flag then

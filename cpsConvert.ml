@@ -28,6 +28,8 @@ let rec translate_kind k =
   | D.ArrK (k1, k2) -> ArrK (translate_kind k1, translate_kind k2)
   | D.ProdK kr -> ProdK (map_row translate_kind kr)
 
+let type_check = ref true
+
 let rec translate_typ t =
   match t with
   | D.VarT i -> VarT i
@@ -48,6 +50,13 @@ let cont k e lam = LetE (lam, k, e)
 let bind k' k e = LetE (VarV k, k', e)
 let tupleV xs = TupV (map_row (fun v -> VarV v) (tup_row xs))
 
+let stack = ref []
+let push e = stack := (D.exp_node_name e) :: (!stack)
+let pop () =
+  match !stack with
+  | [] -> ()
+  | _ :: xs -> stack := xs
+
 let rec translate_exp' env e =
   match e with
   | D.VarE v ->
@@ -60,16 +69,16 @@ let rec translate_exp' env e =
     let e = cont k1 e1 (LamV (x, t1, bind k2 k e2)) in
     k, e, t2
   | D.IfE (eb, e1, e2) ->
-    let kb, b, PrimT Prim.BoolT = translate_exp env eb in
+    let kb, eb, PrimT Prim.BoolT = translate_exp env eb in
     let k1, e1, t1 = translate_exp env e1 in
     let k2, e2, t2 = translate_exp env e2 in
     equal_typ_exn t1 t2;
     let k, xb, x1, x2 = new_var env, new_var env, new_var env, new_var env in
     let e =
-      cont kb b (
+      cont kb eb (
         LamV (xb, PrimT Prim.BoolT,
           cont k1 e1 (
-            LamV (x1, t1, 
+            LamV (x1, t1,
               cont k2 e2 (
                 LamV (x2, t1, 
                   IfE (VarV xb, appV k x1, appV k x2)
@@ -186,17 +195,21 @@ let rec translate_exp' env e =
     k, app k (PrimV prim), typ_of_prim prim
   | D.RecE (x, t, e) ->
     let t = translate_typ t in
-    let k', e, _ = translate_exp (add_val x t env) e in
+    let k', e, t' = translate_exp (add_val x t env) e in
+    equal_typ_exn t t';
     let k = new_var env in
     let e = bind k k' (RecE (x, t, e)) in
     k, e, t
 
 and translate_exp env e =
-  let k, e, t = translate_exp' env e in
-  check_exp (add_val k (NotT t) env) e "translate_exp";
-  k, e, t
+  try 
+    push e;
+    let k, e, t = translate_exp' env e in
+    if !type_check then check_exp (add_val k (NotT t) env) e "translate_exp";
+    k, e, t
+  with
+  | e -> List.iter print_endline (!stack); raise e
 
-let type_check = ref true
 let translate e =
   let env = empty () in
   let k, e, tau = translate_exp env e in
