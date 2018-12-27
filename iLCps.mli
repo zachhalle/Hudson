@@ -91,3 +91,6 @@ val string_of_kind : kind -> string
 val string_of_typ : typ -> string
 val string_of_exp : exp -> string
 val string_of_val : value -> string
+
+val exp_node_name : exp -> string
+val value_node_name : value -> string

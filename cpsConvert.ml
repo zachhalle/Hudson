@@ -80,7 +80,7 @@ let rec translate_exp' env e =
           cont k1 e1 (
             LamV (x1, t1,
               cont k2 e2 (
-                LamV (x2, t1, 
+                LamV (x2, t1,
                   IfE (VarV xb, appV k x1, appV k x2)
                 ))))))
     in
@@ -92,14 +92,14 @@ let rec translate_exp' env e =
     let k, y = new_var env, new_var env in
     let e =
       app k (LamV (y, t,
-        DotE (VarV y, lab 0, x, 
-          DotE (VarV y, lab 1, k', e)
+        DotE (VarV y, lab 1, x,
+          DotE (VarV y, lab 2, k', e)
         )))
     in
     k, e, NotT t
   | D.AppE (e1, e2) ->
     let k1, e1, (NotT (ProdT t1nott2) as t) = translate_exp env e1 in
-    let t1, NotT t2 = lookup_lab (lab 0) t1nott2, lookup_lab (lab 1) t1nott2 in
+    let t1, NotT t2 = lookup_lab (lab 1) t1nott2, lookup_lab (lab 2) t1nott2 in
     let k2, e2, t1' = translate_exp env e2 in
     equal_typ_exn t1 t1';
     let k, f, x = new_var env, new_var env, new_var env in
@@ -124,7 +124,7 @@ let rec translate_exp' env e =
     let k, x, x' = new_var env, new_var env, new_var env in
     let ti = lookup_lab l tr in
     let e =
-      cont k' e (LamV (x, t, 
+      cont k' e (LamV (x, t,
         DotE (VarV x, l, x', appV k x')
       ))
     in
@@ -144,8 +144,8 @@ let rec translate_exp' env e =
     let k, f = new_var env, new_var env in
     let t = subst_typ t1 t2 in
     let e =
-      cont k' e (LamV (f, t', 
-        app f (PackV (t1, VarV k, 
+      cont k' e (LamV (f, t',
+        app f (PackV (t1, VarV k,
           AnyT (kind, NotT t2)
         ))))
     in
@@ -169,7 +169,7 @@ let rec translate_exp' env e =
     let k, x1, x2 = new_var env, new_var env, new_var env in
     let e =
       cont k1 e1 (
-        LamV (x1, at, 
+        LamV (x1, at,
           OpenE (VarV x1, x,
             bind k2 k e2
           )))
@@ -185,7 +185,7 @@ let rec translate_exp' env e =
     let k', e, (RecT (_, t') as t) = translate_exp env e in
     let k, x = new_var env, new_var env in
     let e =
-      cont k' e (LamV (x, t, 
+      cont k' e (LamV (x, t,
         app k (UnrollV (VarV x))
       ))
     in
@@ -202,7 +202,7 @@ let rec translate_exp' env e =
     k, e, t
 
 and translate_exp env e =
-  try 
+  try
     push e;
     let k, e, t = translate_exp' env e in
     if !type_check then check_exp (add_val k (NotT t) env) e "translate_exp";

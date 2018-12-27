@@ -91,7 +91,7 @@ let rec string_of_exp = function
       " else " ^ string_of_exp e2 ^ ")"
   | AppE (v1, v2) -> "(" ^ string_of_val v1 ^ " " ^ string_of_val v2 ^ ")"
   | DotE (v, l, x, e) ->
-    "(proj " ^ x ^ " = " ^ string_of_val v ^ "." ^ l ^ " in " 
+    "(proj " ^ x ^ " = " ^ string_of_val v ^ "." ^ l ^ " in "
       ^ string_of_exp e ^ ")"
   | OpenE (v, x, e) ->
     "(unpack(" ^ x ^ ") = " ^ string_of_val v ^ " in " ^ string_of_exp e ^ ")"
@@ -121,6 +121,26 @@ and string_of_val = function
   | UnrollV (v) -> "unroll(" ^ string_of_val v ^ ")"
   | PrimV prim -> "(prim " ^ Prim.string_of_const prim ^ ")"
 
+let exp_node_name e =
+  match e with
+  | HaltE -> "halt"
+  | IfE _ -> "if"
+  | AppE _ -> "app"
+  | DotE _ -> "dot"
+  | OpenE _ -> "open"
+  | LetE _ -> "let"
+  | RecE _ -> "rec"
+
+let value_node_name v =
+  match v with
+  | VarV _ -> "var"
+  | LamV _ -> "lam"
+  | TupV _ -> "tup"
+  | PackV _ -> "pack"
+  | RollV _ -> "roll"
+  | UnrollV _ -> "unroll"
+  | PrimV _ -> "prim"
+
 (* Substitutions *)
 
 let rec subst_typ_main m s n l t =
@@ -132,9 +152,9 @@ let rec subst_typ_main m s n l t =
       subst_typ_main 0 [] 0 m (List.nth s (i - m))
     else
       VarT (i - n + l)
-  | LamT (k, t) -> 
+  | LamT (k, t) ->
     LamT (k, subst_typ_main (m + 1) s n l t)
-  | AppT (t1, t2) -> 
+  | AppT (t1, t2) ->
     AppT (subst_typ_main m s n l t1, subst_typ_main m s n l t2)
   | ProdT ts ->
     ProdT (map_row (subst_typ_main m s n l) ts)
@@ -176,15 +196,15 @@ let rec subst_exp_main m s n l e =
 and subst_val_main m s n l v =
   match v with
   | VarV _ -> v
-  | LamV (x, t, e) -> 
+  | LamV (x, t, e) ->
     LamV (x, subst_typ_main m s n l t, subst_exp_main m s n l e)
-  | TupV vs -> 
+  | TupV vs ->
     TupV (map_row (subst_val_main m s n l) vs)
   | PackV (t1, v, t2) ->
     PackV (subst_typ_main m s n l t1, subst_val_main m s n l v, subst_typ_main m s n l t2)
-  | RollV (v, t) -> 
+  | RollV (v, t) ->
     RollV (subst_val_main m s n l v, subst_typ_main m s n l t)
-  | UnrollV v -> 
+  | UnrollV v ->
     UnrollV (subst_val_main m s n l v)
   | PrimV c -> PrimV c
 
@@ -206,7 +226,7 @@ type env =
     kenv : kind list ;
     tenv : (int * typ) VarMap.t }
 
-let empty () = 
+let empty () =
   { counter = ref 0 ; ksize = 0 ; kenv = [] ; tenv = VarMap.empty }
 
 let add_typ k { counter ; ksize ; kenv ; tenv } =
@@ -226,7 +246,7 @@ let lookup_typ i { counter ; ksize ; kenv ; tenv } =
   | Failure _ -> raise (Error "Undefined type variable")
 
 let lookup_val v { counter ; ksize ; kenv ; tenv } =
-  let n, c = 
+  let n, c =
     try VarMap.find v tenv with
     | Not_found -> raise (Error "Undefined variable")
   in
@@ -235,7 +255,7 @@ let lookup_val v { counter ; ksize ; kenv ; tenv } =
 let new_var { counter ; ksize ; kenv ; tenv } =
   let rec loop () =
     let v = "v" ^ string_of_int (!counter) in
-    if VarMap.mem v tenv then begin 
+    if VarMap.mem v tenv then begin
       counter := !counter + 1;
       loop ()
     end else
@@ -254,7 +274,7 @@ let rec norm_typ t =
   | AnyT (k, t) -> AnyT (k, norm_typ t)
   | RecT (k, t) -> RecT (k, norm_typ t)
   | LamT (k, t) -> LamT (k, norm_typ t)
-  | AppT (t1, t2) -> 
+  | AppT (t1, t2) ->
     begin match norm_typ t1, norm_typ t2 with
     | LamT (k, t), t2' -> norm_typ (subst_typ t2' t)
     | t1', t2' -> AppT (t1', t2')
@@ -268,7 +288,7 @@ let rec norm_typ t =
 
 let whnf_typ t =
   match t with
-  | AppT (t1, t2) -> 
+  | AppT (t1, t2) ->
     begin match norm_typ t1, norm_typ t2 with
     | LamT (k, t), t2' -> norm_typ (subst_typ t2' t)
     | t1', t2' -> AppT (t1', t2')
@@ -301,7 +321,7 @@ let equal_typ_exn t1 t2 = if not (equal_typ t1 t2) then raise (Error "equal_typ_
 
 (* Checking *)
 module InferPrim = Prim.MakeInfer (
-  struct 
+  struct
     type typExt = typ
     let primT t = PrimT t
     let varT i = VarT i
@@ -315,7 +335,7 @@ let typ_of_prim = InferPrim.infer_prim
 let rec infer_typ env typ =
   match typ with
   | VarT i -> lookup_typ i env
-  | PrimT (Prim.VarT i) -> check_typ env (VarT i) BaseK "PrimT"; BaseK 
+  | PrimT (Prim.VarT i) -> check_typ env (VarT i) BaseK "PrimT"; BaseK
   | PrimT t -> BaseK
   | NotT t -> check_typ env t BaseK "NotT"; BaseK
   | ProdT tr -> iter_row (fun t -> check_typ env t BaseK "ProdTi") tr; BaseK
@@ -378,7 +398,7 @@ and check_exp env exp s =
   | HaltE -> ()
   | IfE (v, e1, e2) ->
     check_val env v (PrimT Prim.BoolT) "IfE1";
-    check_exp env e1 "IfE2"; 
+    check_exp env e1 "IfE2";
     check_exp env e2 "IfE3"
   | AppE (v1, v2) ->
     begin match whnf_typ (infer_val env v1) with

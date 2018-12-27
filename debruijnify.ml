@@ -66,7 +66,7 @@ let rec translate_typ env typ =
   match typ with
   | F.VarT v -> D.VarT (lookup_typ v env)
   | F.PrimT t -> D.PrimT (translate_prim_typ env t)
-  | F.ArrT (t1, t2) -> 
+  | F.ArrT (t1, t2) ->
     D.ArrT (translate_typ env t1, translate_typ env t2)
   | F.ProdT tr -> D.ProdT (map_row (translate_typ env) tr)
   | F.AllT (v, k, t) ->
@@ -123,7 +123,7 @@ let translate_prim_const c =
 let rec translate_exp env exp =
   match exp with
   | F.VarE v -> D.VarE v
-  | F.PrimE c -> begin match c with 
+  | F.PrimE c -> begin match c with
     | Prim.FunV f when f.name = "true" ->
       D.LamE ("", D.ProdT [], D.PrimE (InnerPrim.Prim.BoolV true))
     | Prim.FunV f when f.name = "false" ->
@@ -136,10 +136,10 @@ let rec translate_exp env exp =
   | F.AppE (e1, e2) -> D.AppE (translate_exp env e1, translate_exp env e2)
   | F.TupE er -> D.TupE (map_row (translate_exp env) er)
   | F.DotE (e, l) -> D.DotE (translate_exp env e, l)
-  | F.GenE (v, k, e) -> 
+  | F.GenE (v, k, e) ->
     D.GenE (translate_kind k, translate_exp (add_typ v env) e)
   | F.InstE (e, t) -> D.InstE (translate_exp env e, translate_typ env t)
-  | F.PackE (t, e, t') -> 
+  | F.PackE (t, e, t') ->
     D.PackE (translate_typ env t, translate_exp env e, translate_typ env t')
   | F.OpenE (e1, a, x, e2) ->
     let env' = add_typ a env in
@@ -147,7 +147,7 @@ let rec translate_exp env exp =
   | F.RollE (e, t) -> D.RollE (translate_exp env e, translate_typ env t)
   | F.UnrollE e -> D.UnrollE (translate_exp env e)
   | F.RecE (v, t, e) -> D.RecE (v, translate_typ env t, translate_exp env e)
-  | F.LetE (e1, v, e2) -> 
+  | F.LetE (e1, v, e2) ->
     D.LetE (translate_exp env e1, v, translate_exp env e2)
 
 let type_check = ref false
